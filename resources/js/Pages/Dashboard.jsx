@@ -6,7 +6,7 @@ export default function Dashboard() {
 
     return (
         <AuthenticatedLayout
-            header={<h2 className="text-xl font-bold text-gray-800">Dashboard Utama</h2>}
+            header="Dashboard Utama"
         >
             <Head title="Dashboard" />
 

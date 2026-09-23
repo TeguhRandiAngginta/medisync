@@ -6,6 +6,7 @@ use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\ProductUnit;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class ProductController extends Controller
@@ -19,8 +20,27 @@ class ProductController extends Controller
         ]);
     }
 
+    public function create()
+    {
+        $categories = \App\Models\Category::where('is_active', true)->get();
+        $units = \App\Models\Unit::where('is_active', true)->get();
+        
+        // Memuat daftar Lokasi Rak untuk dropdown form
+        $racks = \App\Models\Rack::where('is_active', true)->get();
+
+        return Inertia::render('Products/Create', [
+            'categories' => $categories,
+            'units' => $units,
+            'racks' => $racks
+        ]);
+    }
+
     public function store(Request $request)
     {
+        // Generate SKU otomatis (Misal: PRD-202609-XYZ1)
+        $autoSku = 'PRD-' . date('Ym') . '-' . strtoupper(Str::random(4));
+        $request->merge(['sku' => $autoSku]);
+
         $validated = $request->validate([
             'sku' => 'required|unique:products,sku',
             'name' => 'required|string|max:255',
@@ -28,7 +48,7 @@ class ProductController extends Controller
             'base_unit_id' => 'required|exists:units,id',
             'type' => 'required|in:obat_bebas,obat_keras,resep,alkes,suplemen,skincare',
             'description' => 'nullable|string',
-
+            
             'product_units' => 'required|array|min:1',
             'product_units.*.unit_id' => 'required|exists:units,id',
             'product_units.*.conversion_factor' => 'required|integer|min:1',
@@ -37,8 +57,6 @@ class ProductController extends Controller
         ]);
 
         DB::transaction(function () use ($validated) {
-            
-            // Simpan produk utama
             $product = Product::create([
                 'sku' => $validated['sku'],
                 'name' => $validated['name'],
@@ -55,22 +73,10 @@ class ProductController extends Controller
                     'conversion_factor' => $unitData['conversion_factor'],
                     'purchase_price' => $unitData['purchase_price'],
                     'selling_price' => $unitData['selling_price'],
-                    'is_default_purchase' => $unitData['is_default_purchase'] ?? false,
-                    'is_default_sales' => $unitData['is_default_sales'] ?? false,
                 ]);
             }
         });
+
         return redirect()->route('products.index');
-    }
-
-    public function create()
-    {
-        $categories = \App\Models\Category::where('is_active', true)->get();
-        $units = \App\Models\Unit::where('is_active', true)->get();
-
-        return Inertia::render('Products/Create', [
-            'categories' => $categories,
-            'units' => $units
-        ]);
     }
 }
