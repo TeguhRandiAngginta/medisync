@@ -1,5 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 
 export default function Index({ products }) {
     return (
@@ -15,9 +15,12 @@ export default function Index({ products }) {
                             
                             <div className="mb-4 flex justify-between items-center">
                                 <h3 className="text-lg font-bold text-gray-700">Daftar Master Data</h3>
-                                <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-semibold">
+                                <Link 
+                                    href={route('products.create')} 
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-semibold"
+                                >
                                     + Tambah Produk
-                                </button>
+                                </Link>
                             </div>
 
                             <div className="overflow-x-auto">
