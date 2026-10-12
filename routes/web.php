@@ -13,7 +13,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-Route::middleware(['auth', 'verified', 'role:superadmin,apoteker'])->group(function () {
+Route::middleware(['auth', 'verified', 'role:superadmin,apoteker,kasir,admin'])->group(function () {
     
     Route::get('/dashboard', function () {
         return Inertia::render('Dashboard');
@@ -33,13 +33,18 @@ Route::middleware(['auth', 'verified', 'role:superadmin,apoteker'])->group(funct
     Route::get('/racks/create', [\App\Http\Controllers\RackController::class, 'create'])->name('racks.create');
     Route::post('/racks', [\App\Http\Controllers\RackController::class, 'store'])->name('racks.store');
 
-    Route::get('/doctors', [\App\Http\Controllers\DoctorController::class, 'index'])->name('doctors.index');
-    Route::get('/doctors/create', [\App\Http\Controllers\DoctorController::class, 'create'])->name('doctors.create');
-    Route::post('/doctors', [\App\Http\Controllers\DoctorController::class, 'store'])->name('doctors.store');
+    Route::get('/audit-logs', [\App\Http\Controllers\AuditLogController::class, 'index'])->name('audit-logs.index');
 
-    Route::get('/patients', [\App\Http\Controllers\PatientController::class, 'index'])->name('patients.index');
-    Route::get('/patients/create', [\App\Http\Controllers\PatientController::class, 'create'])->name('patients.create');
-    Route::post('/patients', [\App\Http\Controllers\PatientController::class, 'store'])->name('patients.store');
+    Route::middleware(['role:superadmin'])->group(function () {
+        Route::get('/users', [\App\Http\Controllers\UserController::class, 'index'])->name('users.index');
+        Route::get('/users/create', [\App\Http\Controllers\UserController::class, 'create'])->name('users.create');
+        Route::post('/users', [\App\Http\Controllers\UserController::class, 'store'])->name('users.store');
+    });
+
+    Route::get('/users/{user}/edit', [\App\Http\Controllers\UserController::class, 'edit'])->name('users.edit');
+    Route::put('/users/{user}', [\App\Http\Controllers\UserController::class, 'update'])->name('users.update');
+
+    Route::delete('/users/{user}', [\App\Http\Controllers\UserController::class, 'destroy'])->name('users.destroy');
 
 });
 

@@ -2,6 +2,8 @@ import { Link, usePage } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 
 const Icons = {
+    Users: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
+    Audit: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>,
     Logo: () => (
         <svg className="w-8 h-8 text-[#48CFA4]" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
             <path d="M10 2a2 2 0 014 0v4h4a2 2 0 110 4h-4v4a2 2 0 11-4 0v-4H6a2 2 0 110-4h4V2z" />
@@ -16,21 +18,6 @@ const Icons = {
             <path d="M20 3v18"></path>
             <path d="M4 8h16"></path>
             <path d="M4 16h16"></path>
-        </svg>
-    ),
-    Dokter: () => (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-            <path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3"></path>
-            <path d="M8 15v1a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6v-4"></path>
-            <circle cx="20" cy="10" r="2"></circle>
-        </svg>
-    ),
-    Pasien: () => (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
-            <circle cx="9" cy="7" r="4"></circle>
-            <line x1="19" y1="8" x2="19" y2="14"></line>
-            <line x1="22" y1="11" x2="16" y2="11"></line>
         </svg>
     ),
     Pembelian: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>,
@@ -122,17 +109,30 @@ export default function AuthenticatedLayout({ header, children }) {
                 </div>
                 
                 <nav className="flex-1 px-4 pt-6 pb-4 overflow-y-auto custom-scrollbar">
-                    {/* ... (Isi NavItem biarkan sama seperti sebelumnya) ... */}
                     <NavItem href={route('dashboard')} path="dashboard" icon={Icons.Dashboard} label="Dashboard" />
-                    <NavItem href="#" path="pos.*" icon={Icons.POS} label="POS / Penjualan" />
-                    <NavItem href={route('products.index')} path="products.*" icon={Icons.Inventaris} label="Inventaris" />
-                    <NavItem href="#" path="purchases.*" icon={Icons.Pembelian} label="Pembelian" />
-                    <NavItem href="#" path="prescriptions.*" icon={Icons.Resep} label="Resep" />
-                    <NavItem href={route('suppliers.index')} path="suppliers.*" icon={Icons.Supplier} label="Supplier" />
-                    <NavItem href={route('racks.index')} path="racks.*" icon={Icons.LokasiRak} label="Lokasi Rak" />
-                    <NavItem href={route('doctors.index')} path="doctors.*" icon={Icons.Dokter} label="Direktori Dokter" />
-                    <NavItem href={route('patients.index')} path="patients.*" icon={Icons.Pasien} label="Direktori Pasien" />
-                    <NavItem href="#" path="reports.*" icon={Icons.Laporan} label="Laporan" />
+                    {['kasir', 'apoteker', 'superadmin'].includes(user.role?.slug) && (
+                        <>
+                            <NavItem href="#" path="pos.*" icon={Icons.POS} label="POS / Penjualan" />
+                            <NavItem href="#" path="prescriptions.*" icon={Icons.Resep} label="Resep Masuk" />
+                        </>
+                    )}
+                    {['apoteker', 'admin', 'superadmin'].includes(user.role?.slug) && (
+                        <>
+                            <NavItem href={route('products.index')} path="products.*" icon={Icons.Inventaris} label="Inventaris" />
+                            <NavItem href="#" path="purchases.*" icon={Icons.Pembelian} label="Pembelian" />
+                            <NavItem href={route('suppliers.index')} path="suppliers.*" icon={Icons.Supplier} label="Supplier" />
+                            <NavItem href={route('racks.index')} path="racks.*" icon={Icons.LokasiRak} label="Lokasi Rak" />
+                        </>
+                    )}
+                    {['admin', 'superadmin'].includes(user.role?.slug) && (
+                        <>
+                            <NavItem href="#" path="reports.*" icon={Icons.Laporan} label="Laporan" />
+                            <NavItem href={route('audit-logs.index')} path="audit-logs.*" icon={Icons.Audit} label="Audit Log" />
+                        </>
+                    )}
+                    {user.role?.slug === 'superadmin' && (
+                        <NavItem href={route('users.index')} path="users.*" icon={Icons.Users} label="Manajemen Akun" />
+                    )}
                 </nav>
 
                 <div className="p-6 border-t border-gray-100 dark:border-gray-800">

@@ -22,6 +22,10 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role_id',      // Tambahkan ini
+        'branch_id',    // Tambahkan ini
+        'phone',        // Tambahkan ini
+        'is_active',    // Tambahkan ini
     ];
 
     /**
@@ -46,8 +50,6 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
-
-    // ... kode model User bawaan sebelumnya ...
 
     public function role()
     {
