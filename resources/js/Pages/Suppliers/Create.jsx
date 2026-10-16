@@ -1,5 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, useForm } from '@inertiajs/react';
+import InputError from '@/Components/InputError';
+import PhoneInput from '@/Components/PhoneInput'; // <-- Pastikan ini di-import
 
 export default function Create() {
     const { data, setData, post, processing, errors } = useForm({
@@ -38,7 +40,7 @@ export default function Create() {
                                 placeholder="Misal: SPL-002"
                                 className="w-full px-4 py-3 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-xl focus:bg-white dark:focus:bg-[#212E36] focus:border-[#48CFA4] focus:ring-2 focus:ring-[#48CFA4]/20 text-gray-900 dark:text-gray-100 transition-colors" 
                             />
-                            {errors.code && <span className="text-red-500 text-xs mt-1 block">{errors.code}</span>}
+                            <InputError message={errors.code} className="mt-2" />
                         </div>
                         
                         <div>
@@ -50,7 +52,7 @@ export default function Create() {
                                 required 
                                 className="w-full px-4 py-3 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-xl focus:bg-white dark:focus:bg-[#212E36] focus:border-[#48CFA4] focus:ring-2 focus:ring-[#48CFA4]/20 text-gray-900 dark:text-gray-100 transition-colors" 
                             />
-                            {errors.name && <span className="text-red-500 text-xs mt-1 block">{errors.name}</span>}
+                            <InputError message={errors.name} className="mt-2" />
                         </div>
 
                         <div>
@@ -61,16 +63,17 @@ export default function Create() {
                                 onChange={e => setData('contact_person', e.target.value)} 
                                 className="w-full px-4 py-3 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-xl focus:bg-white dark:focus:bg-[#212E36] focus:border-[#48CFA4] focus:ring-2 focus:ring-[#48CFA4]/20 text-gray-900 dark:text-gray-100 transition-colors" 
                             />
+                            <InputError message={errors.contact_person} className="mt-2" />
                         </div>
 
+                        {/* PhoneInput Canggih & Bagus */}
                         <div>
                             <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Nomor Telepon</label>
-                            <input 
-                                type="text" 
+                            <PhoneInput 
                                 value={data.phone} 
-                                onChange={e => setData('phone', e.target.value)} 
-                                className="w-full px-4 py-3 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-xl focus:bg-white dark:focus:bg-[#212E36] focus:border-[#48CFA4] focus:ring-2 focus:ring-[#48CFA4]/20 text-gray-900 dark:text-gray-100 transition-colors" 
+                                onChange={(value) => setData('phone', value)} 
                             />
+                            <InputError message={errors.phone} className="mt-2" />
                         </div>
 
                         <div className="md:col-span-2">
@@ -81,6 +84,7 @@ export default function Create() {
                                 onChange={e => setData('email', e.target.value)} 
                                 className="w-full px-4 py-3 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-xl focus:bg-white dark:focus:bg-[#212E36] focus:border-[#48CFA4] focus:ring-2 focus:ring-[#48CFA4]/20 text-gray-900 dark:text-gray-100 transition-colors" 
                             />
+                            <InputError message={errors.email} className="mt-2" />
                         </div>
 
                         <div className="md:col-span-2">
@@ -91,6 +95,7 @@ export default function Create() {
                                 rows="3"
                                 className="w-full px-4 py-3 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-xl focus:bg-white dark:focus:bg-[#212E36] focus:border-[#48CFA4] focus:ring-2 focus:ring-[#48CFA4]/20 text-gray-900 dark:text-gray-100 transition-colors" 
                             ></textarea>
+                            <InputError message={errors.address} className="mt-2" />
                         </div>
                     </div>
 

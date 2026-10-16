@@ -128,6 +128,7 @@ export default function AuthenticatedLayout({ header, children }) {
                         <>
                             <NavItem href="#" path="reports.*" icon={Icons.Laporan} label="Laporan" />
                             <NavItem href={route('audit-logs.index')} path="audit-logs.*" icon={Icons.Audit} label="Audit Log" />
+                            <NavItem href={route('references.index')} path="references.*" icon={Icons.Laporan} label="Data Referensi" />
                         </>
                     )}
                     {user.role?.slug === 'superadmin' && (

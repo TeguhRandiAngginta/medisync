@@ -10,6 +10,7 @@ export default function Index({ logs, currentTab }) {
         { id: 'resep', label: 'Resep Masuk' },
         { id: 'supplier', label: 'Supplier' },
         { id: 'rak', label: 'Lokasi Rak' },
+        { id: 'referensi', label: 'Data Referensi' },
     ];
 
     const handleTabChange = (tabId) => {

@@ -2,12 +2,29 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, useForm } from '@inertiajs/react';
 import InputError from '@/Components/InputError';
 
-export default function Create() {
+export default function Create({ locationTypes }) {
     const { data, setData, post, processing, errors } = useForm({
+        location_type_id: '',
         code: '',
         name: '',
         description: '',
     });
+
+    const handleTypeChange = (e) => {
+        const typeId = e.target.value;
+        setData('location_type_id', typeId);
+
+        const selected = locationTypes.find(t => t.id == typeId);
+        if (selected) {
+            const randomNum = Math.floor(100 + Math.random() * 900);
+            setData(prev => ({
+                ...prev,
+                location_type_id: typeId,
+                code: `${selected.prefix_code}-${randomNum}`,
+                name: `${selected.name} - `
+            }));
+        }
+    };
 
     const submit = (e) => {
         e.preventDefault();
@@ -21,31 +38,49 @@ export default function Create() {
             <div className="bg-white dark:bg-[#1E272E] rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-8 max-w-2xl mx-auto transition-colors duration-300">
                 <div className="mb-8">
                     <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Informasi Lokasi</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Tentukan titik penyimpanan obat seperti etalase depan atau rak gudang belakang.</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Pilih dari Data Referensi terpusat untuk menjaga konsistensi kode dan penamaan.</p>
                 </div>
 
                 <form onSubmit={submit} className="space-y-6">
+                    
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Kode Rak / Etalase</label>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Pilih Tipe Titik Simpan (Dari Data Referensi)</label>
+                        <select 
+                            value={data.location_type_id} 
+                            onChange={handleTypeChange}
+                            required
+                            className="w-full px-4 py-3 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-xl focus:bg-white dark:focus:bg-[#212E36] focus:border-[#48CFA4] focus:ring-2 focus:ring-[#48CFA4]/20 text-gray-900 dark:text-gray-100 transition-colors"
+                        >
+                            <option value="">-- Pilih Tipe Lokasi --</option>
+                            {locationTypes.map((type) => (
+                                <option key={type.id} value={type.id}>
+                                    {type.name} ({type.prefix_code}) - Peruntukan: {type.intended_for || 'Umum'}
+                                </option>
+                            ))}
+                        </select>
+                        <InputError message={errors.location_type_id} className="mt-2" />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Kode Rak / Etalase (Auto-Generated)</label>
                         <input 
                             type="text" 
                             value={data.code} 
                             onChange={e => setData('code', e.target.value)} 
                             required 
-                            placeholder="Misal: RAK-A1"
-                            className="w-full px-4 py-3 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-xl focus:bg-white dark:focus:bg-[#212E36] focus:border-[#48CFA4] focus:ring-2 focus:ring-[#48CFA4]/20 text-gray-900 dark:text-gray-100 transition-colors uppercase" 
+                            className="w-full px-4 py-3 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-xl focus:bg-white dark:focus:bg-[#212E36] focus:border-[#48CFA4] focus:ring-2 focus:ring-[#48CFA4]/20 text-gray-900 dark:text-gray-100 transition-colors uppercase font-mono font-bold text-[#48CFA4]" 
                         />
                         <InputError message={errors.code} className="mt-2" />
                     </div>
                     
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Nama Lokasi</label>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Nama Detail Lokasi</label>
                         <input 
                             type="text" 
                             value={data.name} 
                             onChange={e => setData('name', e.target.value)} 
                             required 
-                            placeholder="Misal: Etalase Obat Bebas"
+                            placeholder="Misal: Etalase Depan Sisi Kanan"
                             className="w-full px-4 py-3 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-xl focus:bg-white dark:focus:bg-[#212E36] focus:border-[#48CFA4] focus:ring-2 focus:ring-[#48CFA4]/20 text-gray-900 dark:text-gray-100 transition-colors" 
                         />
                         <InputError message={errors.name} className="mt-2" />
