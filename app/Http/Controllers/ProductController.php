@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Product;
+use App\Models\Medicine;
+use App\Models\MedicineCategory;
+use App\Models\Supplier;
+use App\Models\Rack;
+use App\Models\AuditLog;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use App\Models\ProductUnit;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 
@@ -13,7 +15,7 @@ class ProductController extends Controller
 {
     public function index()
     {
-        $products = Product::with(['category', 'baseUnit', 'productUnits.unit'])->latest()->get();
+        $products = Medicine::with(['category', 'supplier', 'rack'])->latest()->get();
 
         return Inertia::render('Products/Index', [
             'products' => $products
@@ -22,61 +24,83 @@ class ProductController extends Controller
 
     public function create()
     {
-        $categories = \App\Models\Category::where('is_active', true)->get();
-        $units = \App\Models\Unit::where('is_active', true)->get();
-        
-        // Memuat daftar Lokasi Rak untuk dropdown form
-        $racks = \App\Models\Rack::where('is_active', true)->get();
-
         return Inertia::render('Products/Create', [
-            'categories' => $categories,
-            'units' => $units,
-            'racks' => $racks
+            'categories' => MedicineCategory::where('is_active', true)->get(),
+            'suppliers' => Supplier::where('is_active', true)->get(),
+            'racks' => Rack::where('is_active', true)->get(),
         ]);
     }
 
     public function store(Request $request)
     {
-        // Generate SKU otomatis (Misal: PRD-202609-XYZ1)
-        $autoSku = 'PRD-' . date('Ym') . '-' . strtoupper(Str::random(4));
-        $request->merge(['sku' => $autoSku]);
+        if (!$request->filled('sku')) {
+            $request->merge(['sku' => 'MED-' . date('Ym') . '-' . strtoupper(Str::random(4))]);
+        }
 
         $validated = $request->validate([
-            'sku' => 'required|unique:products,sku',
+            'sku' => 'required|string|unique:medicines,sku',
+            'barcode' => 'nullable|string|unique:medicines,barcode',
             'name' => 'required|string|max:255',
-            'category_id' => 'required|exists:categories,id',
-            'base_unit_id' => 'required|exists:units,id',
-            'type' => 'required|in:obat_bebas,obat_keras,resep,alkes,suplemen,skincare',
-            'description' => 'nullable|string',
-            
-            'product_units' => 'required|array|min:1',
-            'product_units.*.unit_id' => 'required|exists:units,id',
-            'product_units.*.conversion_factor' => 'required|integer|min:1',
-            'product_units.*.purchase_price' => 'required|numeric|min:0',
-            'product_units.*.selling_price' => 'required|numeric|min:0',
+            'generic_name' => 'nullable|string|max:255',
+            'medicine_category_id' => 'required|exists:medicine_categories,id',
+            'supplier_id' => 'nullable|exists:suppliers,id',
+            'rack_id' => 'nullable|exists:racks,id',
+            'dosage_form' => 'nullable|string|max:100',
+            'dosage_strength' => 'nullable|string|max:100',
+            'requires_prescription' => 'boolean',
+            'base_unit' => 'required|string|max:50',
+            'min_stock' => 'required|integer|min:0',
+            'max_stock' => 'nullable|integer|min:0',
         ]);
 
-        DB::transaction(function () use ($validated) {
-            $product = Product::create([
-                'sku' => $validated['sku'],
-                'name' => $validated['name'],
-                'category_id' => $validated['category_id'],
-                'base_unit_id' => $validated['base_unit_id'],
-                'type' => $validated['type'],
-                'description' => $validated['description'] ?? '',
-            ]);
+        $medicine = Medicine::create($validated);
+        
+        AuditLog::record('inventaris', 'CREATE', "Menambahkan master obat baru: {$medicine->name}");
 
-            foreach ($validated['product_units'] as $unitData) {
-                ProductUnit::create([
-                    'product_id' => $product->id,
-                    'unit_id' => $unitData['unit_id'],
-                    'conversion_factor' => $unitData['conversion_factor'],
-                    'purchase_price' => $unitData['purchase_price'],
-                    'selling_price' => $unitData['selling_price'],
-                ]);
-            }
-        });
+        return redirect()->route('products.index')->with('success', 'Data Obat berhasil ditambahkan ke master inventaris.');
+    }
 
-        return redirect()->route('products.index');
+    public function destroy(Medicine $product)
+    {
+        $name = $product->name;
+        $product->delete(); 
+        
+        AuditLog::record('inventaris', 'DELETE', "Menghapus data obat: {$name}");
+        return back()->with('success', "Obat {$name} berhasil dihapus dari sistem.");
+    }
+
+    public function edit(Medicine $product)
+    {
+        return Inertia::render('Products/Edit', [
+            'product' => $product,
+            'categories' => MedicineCategory::where('is_active', true)->get(),
+            'suppliers' => Supplier::where('is_active', true)->get(),
+            'racks' => Rack::where('is_active', true)->get(),
+        ]);
+    }
+
+    public function update(Request $request, Medicine $product)
+    {
+        $validated = $request->validate([
+            'sku' => 'required|string|unique:medicines,sku,' . $product->id,
+            'barcode' => 'nullable|string|unique:medicines,barcode,' . $product->id,
+            'name' => 'required|string|max:255',
+            'generic_name' => 'nullable|string|max:255',
+            'medicine_category_id' => 'required|exists:medicine_categories,id',
+            'supplier_id' => 'nullable|exists:suppliers,id',
+            'rack_id' => 'nullable|exists:racks,id',
+            'dosage_form' => 'nullable|string|max:100',
+            'dosage_strength' => 'nullable|string|max:100',
+            'requires_prescription' => 'boolean',
+            'base_unit' => 'required|string|max:50',
+            'min_stock' => 'required|integer|min:0',
+            'max_stock' => 'nullable|integer|min:0',
+        ]);
+
+        $product->update($validated);
+        
+        AuditLog::record('inventaris', 'UPDATE', "Memperbarui data master obat: {$product->name}");
+
+        return redirect()->route('products.index')->with('success', 'Perubahan Master Obat berhasil disimpan.');
     }
 }

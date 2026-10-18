@@ -1,8 +1,8 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link, router } from '@inertiajs/react'; // Tambah Link & router
+import { Head, Link, router } from '@inertiajs/react'; 
 import PrimaryButton from '@/Components/PrimaryButton';
-import ConfirmModal from '@/Components/ConfirmModal'; // Import ConfirmModal
-import { useState } from 'react'; // Import useState
+import ConfirmModal from '@/Components/ConfirmModal';
+import { useState } from 'react';
 
 const EditIcon = () => (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -34,7 +34,10 @@ export default function Index({ suppliers }) {
                 setIsDeleting(false);
                 setIsModalOpen(false);
             },
-            onError: () => setIsDeleting(false),
+            onError: () => {
+                setIsDeleting(false);
+                setIsModalOpen(false);
+            },
         });
     };
 
@@ -59,14 +62,14 @@ export default function Index({ suppliers }) {
                         <tr>
                             <th className="px-6 py-4 font-bold">Kode</th>
                             <th className="px-6 py-4 font-bold">Nama Perusahaan</th>
-                            <th className="px-6 py-4 font-bold">Kontak Person</th>
+                            <th className="px-6 py-4 font-bold">Tipe (Referensi)</th>
                             <th className="px-6 py-4 font-bold">Telepon</th>
                             <th className="px-6 py-4 font-bold text-center">Status</th>
                             <th className="px-6 py-4 font-bold text-center">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {suppliers.length === 0 ? (
+                        {!suppliers || suppliers.length === 0 ? (
                             <tr>
                                 <td colSpan="6" className="px-6 py-16 text-center text-gray-400">Belum ada data supplier yang didaftarkan.</td>
                             </tr>
@@ -75,7 +78,11 @@ export default function Index({ suppliers }) {
                                 <tr key={supplier.id} className="border-b border-gray-50 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-[#151E24] transition-colors">
                                     <td className="px-6 py-5 font-medium text-gray-900 dark:text-gray-200">{supplier.code}</td>
                                     <td className="px-6 py-5 font-bold text-blue-600 dark:text-[#6FD8E8]">{supplier.name}</td>
-                                    <td className="px-6 py-5 text-gray-600 dark:text-gray-400">{supplier.contact_person || '-'}</td>
+                                    <td className="px-6 py-5">
+                                        <span className="px-3 py-1 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-bold">
+                                            {supplier.supplier_type ? `${supplier.supplier_type.name}` : '-'}
+                                        </span>
+                                    </td>
                                     <td className="px-6 py-5 text-gray-600 dark:text-gray-400 font-mono tracking-wide">{supplier.phone || '-'}</td>
                                     <td className="px-6 py-5 text-center">
                                         {supplier.is_active ? 
@@ -107,12 +114,9 @@ export default function Index({ suppliers }) {
                 isProcessing={isDeleting}
                 title="Hapus Data Supplier?"
                 message={
-                    <>
-                        Apakah Anda yakin ingin menghapus data pemasok <span className="font-bold text-gray-700 dark:text-gray-200">{supplierToDelete?.name}</span>? Tindakan ini tidak dapat dibatalkan.
-                    </>
+                    <>Apakah Anda yakin ingin menghapus data pemasok <span className="font-bold text-gray-700 dark:text-gray-200">{supplierToDelete?.name}</span>? Tindakan ini tidak dapat dibatalkan.</>
                 }
             />
-
         </AuthenticatedLayout>
     );
 }
