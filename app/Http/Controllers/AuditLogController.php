@@ -10,16 +10,16 @@ class AuditLogController extends Controller
 {
     public function index(Request $request)
     {
-        $tab = $request->query('tab', 'akun');
+    $currentTab = $request->get('tab', 'akun');
 
-        $logs = AuditLog::with('user.role')
-            ->where('module', $tab)
-            ->latest()
-            ->get();
+    $logs = \App\Models\AuditLog::with(['user.role'])
+        ->where('module', $currentTab)
+        ->latest()
+        ->get();
 
-        return Inertia::render('AuditLogs/Index', [
-            'logs' => $logs,
-            'currentTab' => $tab
-        ]);
-    }
+    return Inertia::render('AuditLogs/Index', [
+        'logs' => $logs,
+        'currentTab' => $currentTab,
+    ]);
+}
 }

@@ -1,8 +1,9 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\PurchaseController;
+use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::redirect('/', '/login');
@@ -11,6 +12,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::resource('purchases', PurchaseController::class);
+    Route::get('purchases/{purchase}/print', [PurchaseController::class, 'printPdf'])->name('purchases.print');
+    Route::resource('purchases', PurchaseController::class);
+    Route::delete('purchases/{purchase}', [PurchaseController::class, 'destroy'])->name('purchases.destroy');
 });
 
 Route::middleware(['auth', 'verified', 'role:superadmin,apoteker,kasir,admin'])->group(function () {
@@ -22,6 +27,7 @@ Route::middleware(['auth', 'verified', 'role:superadmin,apoteker,kasir,admin'])-
     Route::get('/products', [ProductController::class, 'index'])->name('products.index');
     Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
     Route::post('/products', [ProductController::class, 'store'])->name('products.store');
+    Route::resource('products', \App\Http\Controllers\ProductController::class);
 
     Route::get('/suppliers', [\App\Http\Controllers\SupplierController::class, 'index'])->name('suppliers.index');
     Route::get('/suppliers/create', [\App\Http\Controllers\SupplierController::class, 'create'])->name('suppliers.create');
@@ -54,6 +60,13 @@ Route::middleware(['auth', 'verified', 'role:superadmin,apoteker,kasir,admin'])-
     Route::put('/references/location-types/{locationType}', [\App\Http\Controllers\ReferenceController::class, 'updateLocationType'])->name('references.location-types.update');
     Route::delete('/references/location-types/{locationType}', [\App\Http\Controllers\ReferenceController::class, 'destroyLocationType'])->name('references.location-types.destroy');
 
+    Route::post('/references/supplier-types', [\App\Http\Controllers\ReferenceController::class, 'storeSupplierType'])->name('references.supplier-types.store');
+    Route::put('/references/supplier-types/{supplierType}', [\App\Http\Controllers\ReferenceController::class, 'updateSupplierType'])->name('references.supplier-types.update');
+    Route::delete('/references/supplier-types/{supplierType}', [\App\Http\Controllers\ReferenceController::class, 'destroySupplierType'])->name('references.supplier-types.destroy');
+
+    Route::post('/references/medicine-categories', [\App\Http\Controllers\ReferenceController::class, 'storeMedicineCategory'])->name('references.medicine-categories.store');
+    Route::put('/references/medicine-categories/{medicineCategory}', [\App\Http\Controllers\ReferenceController::class, 'updateMedicineCategory'])->name('references.medicine-categories.update');
+    Route::delete('/references/medicine-categories/{medicineCategory}', [\App\Http\Controllers\ReferenceController::class, 'destroyMedicineCategory'])->name('references.medicine-categories.destroy');
 });
 
 require __DIR__.'/auth.php';

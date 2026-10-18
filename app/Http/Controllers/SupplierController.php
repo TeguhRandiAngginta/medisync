@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Supplier;
 use App\Models\AuditLog;
+use App\Models\SupplierType;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -11,7 +12,7 @@ class SupplierController extends Controller
 {
     public function index()
     {
-        $suppliers = Supplier::latest()->get();
+        $suppliers = Supplier::with('supplierType')->latest()->get();
         return Inertia::render('Suppliers/Index', [
             'suppliers' => $suppliers
         ]);
@@ -19,12 +20,15 @@ class SupplierController extends Controller
 
     public function create()
     {
-        return Inertia::render('Suppliers/Create');
+        return Inertia::render('Suppliers/Create', [
+            'supplierTypes' => SupplierType::all()
+        ]);
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
+            'supplier_type_id' => 'required|exists:supplier_types,id', // Validasi Field Baru
             'code' => 'required|unique:suppliers,code',
             'name' => 'required|string|max:255',
             'contact_person' => 'nullable|string|max:255',
@@ -35,22 +39,23 @@ class SupplierController extends Controller
 
         $supplier = Supplier::create($validated);
 
-        \App\Models\AuditLog::record('supplier', 'CREATE', "Menambahkan pemasok baru: {$supplier->name}");
+        AuditLog::record('supplier', 'CREATE', "Menambahkan pemasok baru: {$supplier->name}");
 
-        return redirect()->route('suppliers.index');
+        return redirect()->route('suppliers.index')->with('success', 'Data Pemasok berhasil ditambahkan!');
     }
 
-    public function edit(\App\Models\Supplier $supplier)
+    public function edit(Supplier $supplier)
     {
         return Inertia::render('Suppliers/Edit', [
-            'supplierEdit' => $supplier
+            'supplierEdit' => $supplier,
+            'supplierTypes' => SupplierType::all()
         ]);
     }
 
-    public function update(Request $request, \App\Models\Supplier $supplier)
+    public function update(Request $request, Supplier $supplier)
     {
         $validated = $request->validate([
-            // Pengecualian validasi unique untuk ID supplier yang sedang diedit
+            'supplier_type_id' => 'required|exists:supplier_types,id', // Validasi Field Baru
             'code' => 'required|string|max:50|unique:suppliers,code,' . $supplier->id,
             'name' => 'required|string|max:255',
             'contact_person' => 'nullable|string|max:255',
@@ -64,16 +69,15 @@ class SupplierController extends Controller
 
         AuditLog::record('supplier', 'UPDATE', "Memperbarui data pemasok: {$supplier->name}");
 
-        return redirect()->route('suppliers.index');
+        return redirect()->route('suppliers.index')->with('success', 'Data Pemasok berhasil diperbarui!');
     }
 
-    public function destroy(\App\Models\Supplier $supplier)
+    public function destroy(Supplier $supplier)
     {
         $supplierName = $supplier->name;
         $supplier->delete();
 
         AuditLog::record('supplier', 'DELETE', "Menghapus data pemasok: {$supplierName}");
-
-        return redirect()->route('suppliers.index');
+        return redirect()->route('suppliers.index')->with('success', "Data Pemasok {$supplierName} berhasil dihapus permanen.");
     }
 }
