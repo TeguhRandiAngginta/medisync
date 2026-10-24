@@ -36,7 +36,6 @@ export default function AuthenticatedLayout({ header, children }) {
     const { auth, flash, errors } = usePage().props;
     const user = auth.user;
     
-    // Perbaikan: Fallback aman jika role belum diset
     const userRole = user?.role?.slug || 'superadmin'; 
     
     const [isDarkMode, setIsDarkMode] = useState(false);
@@ -115,13 +114,14 @@ export default function AuthenticatedLayout({ header, children }) {
                     <NavItem href={route('dashboard')} path="dashboard" icon={Icons.Dashboard} label="Dashboard" />
                     {['kasir', 'apoteker', 'superadmin'].includes(userRole) && (
                         <>
-                            <NavItem href="#" path="pos.*" icon={Icons.POS} label="POS / Penjualan" />
+                            <NavItem href={route('pos.index')} path="pos.*" icon={Icons.POS} label="POS / Penjualan" />
+                            <NavItem href={route('sales.history')} path="sales.*" icon={Icons.Resep} label="Riwayat Penjualan" />
                             <NavItem href="#" path="prescriptions.*" icon={Icons.Resep} label="Resep Masuk" />
                         </>
                     )}
                     {['apoteker', 'admin', 'superadmin'].includes(userRole) && (
                         <>
-                            <NavItem href={route('products.index')} path="products.*" icon={Icons.Inventaris} label="Inventaris" />
+                            <NavItem href={route('products.index')} path="products.*" icon={Icons.Inventaris} label="Products" />
                             <NavItem href={route('purchases.index')} path="purchases.*" icon={Icons.Pembelian} label="Pembelian" />
                             <NavItem href={route('suppliers.index')} path="suppliers.*" icon={Icons.Supplier} label="Supplier" />
                             <NavItem href={route('racks.index')} path="racks.*" icon={Icons.LokasiRak} label="Lokasi Rak" />

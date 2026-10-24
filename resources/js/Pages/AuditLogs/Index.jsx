@@ -7,6 +7,7 @@ export default function Index({ logs, currentTab }) {
         { id: 'inventaris', label: 'Inventaris' },
         { id: 'stok', label: 'Pergerakan Stok' },
         { id: 'pembelian', label: 'Pembelian' },
+        { id: 'pos', label: 'POS / Penjualan' },
         { id: 'resep', label: 'Resep Masuk' },
         { id: 'supplier', label: 'Supplier' },
         { id: 'rak', label: 'Lokasi Rak' },
@@ -54,7 +55,6 @@ export default function Index({ logs, currentTab }) {
                 ))}
             </div>
 
-            {/* Tabel Log */}
             <div className="bg-white dark:bg-[#1E272E] rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 transition-colors duration-300">
                 <div className="p-6 border-b border-gray-100 dark:border-gray-800">
                     <h4 className="font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wide text-sm">

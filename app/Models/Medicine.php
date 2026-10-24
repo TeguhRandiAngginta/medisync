@@ -24,6 +24,7 @@ class Medicine extends Model
         'min_stock',
         'max_stock',
         'is_active',
+        'selling_price',
     ];
 
     protected $casts = [
@@ -31,19 +32,16 @@ class Medicine extends Model
         'is_active' => 'boolean',
     ];
 
-    // Relasi ke Golongan Obat
     public function category()
     {
         return $this->belongsTo(MedicineCategory::class, 'medicine_category_id');
     }
 
-    // Relasi ke Supplier
     public function supplier()
     {
         return $this->belongsTo(Supplier::class);
     }
 
-    // Relasi ke Lokasi Rak
     public function rack()
     {
         return $this->belongsTo(Rack::class);

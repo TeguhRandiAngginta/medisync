@@ -18,6 +18,7 @@ export default function Edit({ product, categories, suppliers, racks }) {
         dosage_strength: product.dosage_strength || '',
         requires_prescription: product.requires_prescription || false,
         base_unit: product.base_unit || '',
+        selling_price: product.selling_price || '',
         min_stock: product.min_stock || 0,
         max_stock: product.max_stock || '',
     });
@@ -123,10 +124,10 @@ export default function Edit({ product, categories, suppliers, racks }) {
                         </div>
                     </div>
 
-                    {/* SPESIFIKASI MEDIS & STOK */}
+                    {/* SPESIFIKASI MEDIS, HARGA & STOK */}
                     <div className="bg-white dark:bg-[#1E272E] p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
                         <h4 className="text-base font-bold text-gray-800 dark:text-gray-200 mb-6 flex items-center gap-2">
-                            <span className="w-2 h-6 bg-[#F6A84B] rounded-full"></span> Spesifikasi & Stok Minimum
+                            <span className="w-2 h-6 bg-[#F6A84B] rounded-full"></span> Spesifikasi, Harga & Stok
                         </h4>
                         
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -142,6 +143,11 @@ export default function Edit({ product, categories, suppliers, racks }) {
                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Satuan Terkecil <span className="text-red-500">*</span></label>
                                 <input type="text" value={data.base_unit} onChange={e => setData('base_unit', e.target.value)} required className="w-full px-4 py-3 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-xl focus:border-[#48CFA4] text-gray-900 dark:text-gray-100" />
                                 <InputError message={errors.base_unit} className="mt-2" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Harga Jual (HJA) <span className="text-red-500">*</span></label>
+                                <input type="number" min="0" value={data.selling_price} onChange={e => setData('selling_price', e.target.value)} required placeholder="Misal: 15000" className="w-full px-4 py-3 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-xl focus:border-[#48CFA4] text-gray-900 dark:text-gray-100 font-mono" />
+                                <InputError message={errors.selling_price} className="mt-2" />
                             </div>
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Batas Peringatan Stok <span className="text-red-500">*</span></label>
