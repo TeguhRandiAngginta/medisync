@@ -49,6 +49,7 @@ class ProductController extends Controller
             'dosage_strength' => 'nullable|string|max:100',
             'requires_prescription' => 'boolean',
             'base_unit' => 'required|string|max:50',
+            'selling_price' => 'required|numeric|min:0',
             'min_stock' => 'required|integer|min:0',
             'max_stock' => 'nullable|integer|min:0',
         ]);
@@ -93,6 +94,7 @@ class ProductController extends Controller
             'dosage_strength' => 'nullable|string|max:100',
             'requires_prescription' => 'boolean',
             'base_unit' => 'required|string|max:50',
+            'selling_price' => 'required|numeric|min:0',
             'min_stock' => 'required|integer|min:0',
             'max_stock' => 'nullable|integer|min:0',
         ]);

@@ -110,7 +110,7 @@ class PurchaseController extends Controller
         ]);
     }
 
-public function destroy(Purchase $purchase)
+    public function destroy(Purchase $purchase)
     {
         DB::beginTransaction();
         try {
@@ -134,6 +134,73 @@ public function destroy(Purchase $purchase)
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['message' => 'Gagal menghapus pembelian: ' . $e->getMessage()]);
+        }
+    }
+
+    public function trash()
+    {
+        $trashedPurchases = Purchase::onlyTrashed()
+            ->with(['supplier', 'user'])
+            ->latest()
+            ->get();
+
+        return Inertia::render('Purchases/Trash', [
+            'purchases' => $trashedPurchases
+        ]);
+    }
+
+    public function restore($id)
+    {
+        DB::beginTransaction();
+        try {
+            $purchase = Purchase::onlyTrashed()->findOrFail($id);
+            
+            $purchase->restore();
+            $purchase->details()->restore();
+
+            if (class_exists(\App\Models\AuditLog::class)) {
+                \App\Models\AuditLog::record(
+                    'pembelian', 
+                    'RESTORE', 
+                    "Memulihkan data faktur pembelian PBF No: {$purchase->invoice_number} dari tong sampah."
+                );
+            }
+
+            DB::commit();
+            return redirect()->route('purchases.trash')
+                ->with('success', "Faktur pembelian {$purchase->invoice_number} berhasil dipulihkan.");
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal memulihkan data: ' . $e->getMessage()]);
+        }
+    }
+
+    public function forceDelete($id)
+    {
+        DB::beginTransaction();
+        try {
+            $purchase = Purchase::onlyTrashed()->findOrFail($id);
+            $invoiceNumber = $purchase->invoice_number;
+
+            if (class_exists(\App\Models\AuditLog::class)) {
+                \App\Models\AuditLog::record(
+                    'pembelian', 
+                    'FORCE DELETE', 
+                    "Menghapus PERMANEN faktur pembelian PBF No: {$invoiceNumber} dari database."
+                );
+            }
+
+            $purchase->details()->forceDelete();
+            $purchase->forceDelete();
+
+            DB::commit();
+            return redirect()->route('purchases.trash')
+                ->with('success', "Faktur pembelian {$invoiceNumber} berhasil dimusnahkan secara permanen.");
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal menghapus permanen data: ' . $e->getMessage()]);
         }
     }
 }

@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Purchase extends Model
 {
+    use SoftDeletes;
+    
     protected $fillable = [
         'internal_receipt_number', 'invoice_number', 'supplier_id', 'user_id', 
         'purchase_date', 'total_amount', 'status', 'notes'

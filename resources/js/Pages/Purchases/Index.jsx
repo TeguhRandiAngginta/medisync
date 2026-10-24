@@ -49,15 +49,29 @@ export default function Index({ purchases }) {
         <AuthenticatedLayout header="Pembelian & Barang Masuk">
             <Head title="Data Pembelian" />
 
-            <div className="flex justify-between items-center mb-8">
+            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-8">
                 <div>
                     <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Faktur Pembelian</h3>
                     <p className="text-sm text-gray-500 dark:text-gray-400">Pencatatan faktur supplier, nomor batch, dan expired date.</p>
                 </div>
-                <PrimaryButton as="link" href={route('purchases.create')}>
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
-                    Catat Faktur Baru
-                </PrimaryButton>
+                <div className="flex items-center gap-3">
+                    <Link 
+                        href={route('purchases.trash')}
+                        className="flex items-center px-4 py-2.5 bg-gray-100 text-gray-600 dark:bg-[#151E24] dark:text-gray-400 rounded-xl text-sm font-bold hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 transition-colors border border-transparent dark:border-gray-800 hover:border-red-200 dark:hover:border-red-800/50"
+                    >
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                        Lihat Tong Sampah
+                    </Link>
+
+                    <PrimaryButton as="link" href={route('purchases.create')} className="rounded-xl px-4 py-2.5">
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        Catat Faktur Baru
+                    </PrimaryButton>
+                </div>
             </div>
 
             <div className="overflow-x-auto bg-white dark:bg-[#1E272E] rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 transition-colors duration-300">

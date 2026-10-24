@@ -3,6 +3,7 @@
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\PurchaseController;
+use App\Http\Controllers\SalesHistoryController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -12,10 +13,27 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    Route::get('purchases/trash', [App\Http\Controllers\PurchaseController::class, 'trash'])->name('purchases.trash');
+    Route::post('purchases/{id}/restore', [App\Http\Controllers\PurchaseController::class, 'restore'])->name('purchases.restore');
+    Route::delete('purchases/{id}/force-delete', [App\Http\Controllers\PurchaseController::class, 'forceDelete'])->name('purchases.force-delete');
+
     Route::resource('purchases', PurchaseController::class);
     Route::get('purchases/{purchase}/print', [PurchaseController::class, 'printPdf'])->name('purchases.print');
+
     Route::resource('purchases', PurchaseController::class);
     Route::delete('purchases/{purchase}', [PurchaseController::class, 'destroy'])->name('purchases.destroy');
+
+    Route::get('/pos', [App\Http\Controllers\PosController::class, 'index'])->name('pos.index');
+    Route::post('/pos', [App\Http\Controllers\PosController::class, 'store'])->name('pos.store');
+    Route::get('/pos/receipt/{invoice}', [App\Http\Controllers\PosController::class, 'printReceipt'])->name('pos.receipt');
+
+    Route::get('/sales-history', [SalesHistoryController::class, 'index'])->name('sales.history');
+    Route::get('/sales-history', [SalesHistoryController::class, 'index'])->name('sales.history');
+    Route::get('/sales-history/trash', [SalesHistoryController::class, 'trash'])->name('sales.trash');
+    Route::delete('/sales-history/{id}', [SalesHistoryController::class, 'destroy'])->name('sales.destroy');
+    Route::post('/sales-history/{id}/restore', [SalesHistoryController::class, 'restore'])->name('sales.restore');
+    Route::delete('/sales-history/{id}/force-delete', [SalesHistoryController::class, 'forceDelete'])->name('sales.force-delete');
 });
 
 Route::middleware(['auth', 'verified', 'role:superadmin,apoteker,kasir,admin'])->group(function () {
