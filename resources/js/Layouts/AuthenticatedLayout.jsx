@@ -35,7 +35,6 @@ const Icons = {
 export default function AuthenticatedLayout({ header, children }) {
     const { auth, flash, errors } = usePage().props;
     const user = auth.user;
-    
     const userRole = user?.role?.slug || 'superadmin'; 
     
     const [isDarkMode, setIsDarkMode] = useState(false);
@@ -129,7 +128,8 @@ export default function AuthenticatedLayout({ header, children }) {
                     )}
                     {['admin', 'superadmin'].includes(userRole) && (
                         <>
-                            <NavItem href="#" path="reports.*" icon={Icons.Laporan} label="Laporan" />
+                            {/* LINK LAPORAN TELAH DIPERBAIKI DI BAWAH INI */}
+                            <NavItem href={route('reports.index')} path="reports.*" icon={Icons.Laporan} label="Laporan" />
                             <NavItem href={route('audit-logs.index')} path="audit-logs.*" icon={Icons.Audit} label="Audit Log" />
                             <NavItem href={route('references.index')} path="references.*" icon={Icons.Laporan} label="Data Referensi" />
                         </>
