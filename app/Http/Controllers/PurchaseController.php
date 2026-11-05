@@ -43,10 +43,27 @@ class PurchaseController extends Controller
             'items' => 'required|array|min:1',
             'items.*.medicine_id' => 'required|exists:medicines,id',
             'items.*.batch_number' => 'required|string|max:100',
-            'items.*.expired_date' => 'required|date|after:today',
+            'items.*.expired_date' => 'required|date|after_or_equal:' . now()->addMonths(6)->format('Y-m-d'),
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.uom' => 'required|string|max:50',
             'items.*.purchase_price' => 'required|numeric|min:0',
+        ], [
+            'internal_receipt_number.required' => 'Nomor penerimaan internal wajib ada.',
+            'internal_receipt_number.unique' => 'Nomor penerimaan internal ini sudah terdaftar di sistem.',
+            'invoice_number.required' => 'Nomor faktur PBF asli wajib diisi.',
+            'supplier_id.required' => 'Silakan pilih supplier PBF terlebih dahulu.',
+            'supplier_id.exists' => 'Supplier yang dipilih tidak valid.',
+            'purchase_date.required' => 'Tanggal faktur wajib diisi.',
+            'items.required' => 'Minimal harus ada 1 item obat yang dimasukkan.',
+            'items.*.medicine_id.required' => 'Pilih obat master terlebih dahulu.',
+            'items.*.medicine_id.exists' => 'Data obat master tidak ditemukan.',
+            'items.*.batch_number.required' => 'Nomor batch pabrik wajib diisi.',
+            'items.*.expired_date.required' => 'Tanggal kadaluarsa wajib diisi.',
+            'items.*.expired_date.after_or_equal' => 'Masa berlaku (expired date) obat terlalu dekat! Standar apotek minimal 6 bulan ke depan dari hari ini.',
+            'items.*.quantity.required' => 'Jumlah kuantitas obat wajib diisi.',
+            'items.*.quantity.min' => 'Jumlah kuantitas minimal adalah 1.',
+            'items.*.purchase_price.required' => 'Harga beli wajib diisi.',
+            'items.*.purchase_price.min' => 'Harga beli tidak boleh bernilai negatif.',
         ]);
 
         DB::beginTransaction();
@@ -76,9 +93,14 @@ class PurchaseController extends Controller
                     'purchase_price' => $item['purchase_price'],
                     'subtotal' => $item['quantity'] * $item['purchase_price'],
                 ]);
+
+                // Otomatis tambah stok obat di master produk
+                $medicine = Medicine::find($item['medicine_id']);
+                if ($medicine) {
+                    $medicine->increment('stock', $item['quantity']);
+                }
             }
 
-            // Menggunakan helper record dari model AuditLog
             AuditLog::record(
                 'pembelian', 
                 'CREATE', 
@@ -116,6 +138,15 @@ class PurchaseController extends Controller
         try {
             $purchase->load('details');
             $invoiceNumber = $purchase->invoice_number;
+            
+            foreach ($purchase->details as $detail) {
+                $medicine = Medicine::find($detail->medicine_id);
+                if ($medicine) {
+                    // Pastikan stok tidak minus menggunakan operator minus (-) yang benar
+                    $newStock = max(0, $medicine->stock - $detail->quantity);
+                    $medicine->update(['stock' => $newStock]);
+                }
+            }
 
             AuditLog::record(
                 'pembelian', 

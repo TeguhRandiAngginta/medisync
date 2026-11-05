@@ -115,7 +115,7 @@ export default function AuthenticatedLayout({ header, children }) {
                         <>
                             <NavItem href={route('pos.index')} path="pos.*" icon={Icons.POS} label="POS / Penjualan" />
                             <NavItem href={route('sales.history')} path="sales.*" icon={Icons.Resep} label="Riwayat Penjualan" />
-                            <NavItem href="#" path="prescriptions.*" icon={Icons.Resep} label="Resep Masuk" />
+                            <NavItem href={route('prescriptions.index')} path="prescriptions.*" icon={Icons.Resep} label="Resep Masuk" />
                         </>
                     )}
                     {['apoteker', 'admin', 'superadmin'].includes(userRole) && (

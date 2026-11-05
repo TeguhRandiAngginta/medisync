@@ -6,12 +6,13 @@ use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\SalesHistoryController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\PrescriptionController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::redirect('/', '/login');
 
-    Route::middleware('auth')->group(function () {
+Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     
     // Profile
@@ -31,6 +32,17 @@ Route::redirect('/', '/login');
     Route::post('/pos', [App\Http\Controllers\PosController::class, 'store'])->name('pos.store');
     Route::get('/pos/receipt/{invoice}', [App\Http\Controllers\PosController::class, 'printReceipt'])->name('pos.receipt');
 
+    // Prescriptions (AI Analyze, Resource, & POS API)
+    Route::post('/api/prescriptions/analyze', [PrescriptionController::class, 'analyzeImage'])->name('api.prescriptions.analyze');
+    Route::get('/api/prescriptions/{number}', [PrescriptionController::class, 'getForPos'])->name('api.prescriptions.get');
+
+    // Resource standard 
+    Route::resource('prescriptions', PrescriptionController::class)->except(['show', 'edit', 'update']);
+
+    // Rute Edit & Update Tambahan untuk Fitur Koreksi Resep
+    Route::get('/prescriptions/{prescription}/edit', [PrescriptionController::class, 'edit'])->name('prescriptions.edit');
+    Route::put('/prescriptions/{prescription}', [PrescriptionController::class, 'update'])->name('prescriptions.update');
+
     // Sales History (Trash & Management)
     Route::get('/sales-history', [SalesHistoryController::class, 'index'])->name('sales.history');
     Route::get('/sales-history/trash', [SalesHistoryController::class, 'trash'])->name('sales.trash');
@@ -39,8 +51,8 @@ Route::redirect('/', '/login');
     Route::delete('/sales-history/{id}/force-delete', [SalesHistoryController::class, 'forceDelete'])->name('sales.force-delete');
 });
 
-    // Grup Middleware Superadmin, Apoteker, Kasir, Admin
-    Route::middleware(['auth', 'verified', 'role:superadmin,apoteker,kasir,admin'])->group(function () {
+// Grup Middleware Superadmin, Apoteker, Kasir, Admin
+Route::middleware(['auth', 'verified', 'role:superadmin,apoteker,kasir,admin'])->group(function () {
 
     // Products
     Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
