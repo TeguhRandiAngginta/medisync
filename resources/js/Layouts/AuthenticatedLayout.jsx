@@ -12,19 +12,14 @@ const Icons = {
     Dashboard: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>,
     POS: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
     Inventaris: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>,
-    LokasiRak: () => (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-            <path d="M4 3v18"></path>
-            <path d="M20 3v18"></path>
-            <path d="M4 8h16"></path>
-            <path d="M4 16h16"></path>
-        </svg>
-    ),
+    LokasiRak: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M4 3v18"></path><path d="M20 3v18"></path><path d="M4 8h16"></path><path d="M4 16h16"></path></svg>,
     Pembelian: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>,
     Resep: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
     Supplier: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>,
     Laporan: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>,
-    Chevron: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>,
+    DataReference: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>,
+    List: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16"></path></svg>,
+    ChevronRight: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>,
     ChevronDown: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>,
     Sun: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="M4.93 4.93l1.41 1.41"></path><path d="M17.66 17.66l1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="M4.93 19.07l1.41-1.41"></path><path d="M17.66 6.34l1.41-1.41"></path></svg>,
     Moon: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg>,
@@ -39,6 +34,7 @@ export default function AuthenticatedLayout({ header, children }) {
     
     const [isDarkMode, setIsDarkMode] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
+    const [openMenu, setOpenMenu] = useState('dashboard');
 
     useEffect(() => {
         const theme = localStorage.getItem('theme');
@@ -49,6 +45,14 @@ export default function AuthenticatedLayout({ header, children }) {
             setIsDarkMode(false);
             document.documentElement.classList.remove('dark');
         }
+
+        const currentPath = route().current();
+        if (currentPath?.startsWith('dashboard')) setOpenMenu('dashboard');
+        else if (currentPath?.startsWith('references') || currentPath?.startsWith('racks') || currentPath?.startsWith('suppliers') || currentPath?.startsWith('products')) setOpenMenu('master');
+        // DIPERBAIKI: Menambahkan pengecekan 'batches' agar menu Inventaris & Gudang tetap terbuka
+        else if (currentPath?.startsWith('purchases') || currentPath?.startsWith('batches') || currentPath?.startsWith('stocks') || currentPath?.startsWith('audit-logs')) setOpenMenu('inventory');
+        else if (currentPath?.startsWith('pos') || currentPath?.startsWith('prescriptions') || currentPath?.startsWith('sales')) setOpenMenu('transaction');
+        else if (currentPath?.startsWith('reports') || currentPath?.startsWith('users')) setOpenMenu('system');
     }, []);
 
     const toggleTheme = () => {
@@ -65,30 +69,71 @@ export default function AuthenticatedLayout({ header, children }) {
 
     const isActive = (path) => route().current(path);
 
-    const NavItem = ({ href, icon: Icon, label, path, badge = null }) => {
+    const NavGroup = ({ id, label, icon: Icon, children }) => {
+        const isOpen = openMenu === id;
+        
+        return (
+            <div className="mb-2">
+                <button 
+                    onClick={() => setOpenMenu(isOpen ? '' : id)}
+                    className={`w-full flex items-center justify-between px-5 py-3 rounded-2xl transition-all duration-200 group
+                    ${isOpen 
+                        ? 'bg-[#EAF5F0] dark:bg-[#253939] text-[#246A55] dark:text-[#67E2B4] font-bold shadow-sm' 
+                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#212E36] font-medium'
+                    }`}
+                >
+                    <div className="flex items-center gap-4">
+                        <Icon />
+                        <span className="text-[14px] tracking-wide text-left">{label}</span>
+                    </div>
+                    <div className={`transition-transform duration-300 ${isOpen ? 'rotate-90 text-[#246A55] dark:text-[#67E2B4]' : 'text-gray-300 dark:text-gray-600 group-hover:text-gray-400'}`}>
+                        <Icons.ChevronRight />
+                    </div>
+                </button>
+                
+                <div className={`nav-dropdown-content overflow-hidden transition-all duration-300 ease-in-out ${isOpen ? 'max-h-[400px] opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                    <div className="pl-11 pr-2 py-2 space-y-1 relative before:absolute before:left-[27px] before:top-4 before:bottom-4 before:w-[2px] before:bg-gray-100 dark:before:bg-gray-800 before:rounded-full">
+                        {children}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const SubNavItem = ({ href, label, path }) => {
         const active = isActive(path);
         return (
             <Link 
                 href={href} 
-                className={`flex items-center justify-between px-5 py-3 mb-1.5 rounded-2xl transition-all duration-200 group
+                className={`flex items-center gap-3 px-4 py-2 rounded-xl transition-all duration-200 text-[13px] font-semibold relative
+                ${active 
+                    ? 'text-[#48CFA4] bg-white dark:bg-[#1E272E] shadow-sm border border-gray-100 dark:border-gray-800' 
+                    : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#212E36]'
+                }`}
+            >
+                {active && (
+                    <span className="absolute -left-[18px] top-1/2 -translate-y-1/2 w-[6px] h-[6px] rounded-full bg-[#48CFA4] shadow-[0_0_8px_#48CFA4]"></span>
+                )}
+                {label}
+            </Link>
+        );
+    };
+
+    const SingleNavItem = ({ href, icon: Icon, label, path, id }) => {
+        const active = isActive(path);
+        return (
+            <Link 
+                href={href} 
+                onClick={() => setOpenMenu(id)}
+                className={`flex items-center justify-between px-5 py-3 mb-2 rounded-2xl transition-all duration-200 group
                     ${active 
-                        ? 'bg-[#EAF5F0] dark:bg-[#253939] text-[#246A55] dark:text-[#67E2B4] font-bold' 
+                        ? 'bg-[#EAF5F0] dark:bg-[#253939] text-[#246A55] dark:text-[#67E2B4] font-bold shadow-sm' 
                         : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#212E36] font-medium'
                     }`}
             >
                 <div className="flex items-center gap-4">
                     <Icon />
                     <span className="text-[14px] tracking-wide">{label}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    {badge && (
-                        <span className="bg-[#48CFA4] text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full">
-                            {badge}
-                        </span>
-                    )}
-                    <span className={`${active ? 'text-[#246A55] dark:text-[#67E2B4]' : 'text-gray-300 dark:text-gray-600 group-hover:text-gray-400'}`}>
-                        <Icons.Chevron />
-                    </span>
                 </div>
             </Link>
         );
@@ -98,7 +143,7 @@ export default function AuthenticatedLayout({ header, children }) {
         <div className={`h-screen w-full font-sans ${isDarkMode ? 'bg-[#151D23]' : 'bg-[#F4F7F6]'} flex transition-colors duration-300 overflow-hidden`}>
             
             {/* SIDEBAR */}
-            <aside className={`w-[280px] h-full flex-shrink-0 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)] dark:shadow-[4px_0_24px_rgba(0,0,0,0.2)] transition-colors duration-300 relative z-30
+            <aside className={`w-[290px] h-full flex-shrink-0 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)] dark:shadow-[4px_0_24px_rgba(0,0,0,0.2)] transition-colors duration-300 relative z-30
                 ${isDarkMode ? 'bg-[#1E272E]' : 'bg-white'} hidden md:flex`}>
                 <div className={`h-20 px-8 flex items-center gap-3 transition-colors duration-300
                     ${isDarkMode ? 'bg-[#151E24]' : 'bg-[#EBF7F2]'}`}>
@@ -110,32 +155,38 @@ export default function AuthenticatedLayout({ header, children }) {
                 </div>
                 
                 <nav className="flex-1 px-4 pt-6 pb-4 overflow-y-auto custom-scrollbar">
-                    <NavItem href={route('dashboard')} path="dashboard" icon={Icons.Dashboard} label="Dashboard" />
+                    <SingleNavItem id="dashboard" href={route('dashboard')} path="dashboard" icon={Icons.Dashboard} label="Dashboard" />
+                    {['apoteker', 'superadmin'].includes(userRole) && (
+                        <NavGroup id="master" label="Data Master" icon={Icons.DataReference}>
+                            {['superadmin'].includes(userRole) && (
+                                <SubNavItem href={route('references.index')} path="references.*" label="Data Referensi" />
+                            )}
+                            <SubNavItem href={route('racks.index')} path="racks.*" label="Lokasi Rak" />
+                            <SubNavItem href={route('suppliers.index')} path="suppliers.*" label="Pemasok / Supplier" />
+                            <SubNavItem href={route('products.index')} path="products.*" label="Katalog Obat" />
+                        </NavGroup>
+                    )}
+                    {['apoteker', 'superadmin'].includes(userRole) && (
+                        <NavGroup id="inventory" label="Inventaris & Gudang" icon={Icons.Pembelian}>
+                            <SubNavItem href={route('purchases.index')} path="purchases.*" label="Faktur Pembelian" />
+                            <SubNavItem href={route('batches.index')} path="batches.*" label="Monitoring Batch & ED" />
+                            {['superadmin'].includes(userRole) && (
+                                <SubNavItem href={route('audit-logs.index')} path="audit-logs.*" label="Audit Log" />
+                            )}
+                        </NavGroup>
+                    )}
                     {['kasir', 'apoteker', 'superadmin'].includes(userRole) && (
-                        <>
-                            <NavItem href={route('pos.index')} path="pos.*" icon={Icons.POS} label="POS / Penjualan" />
-                            <NavItem href={route('sales.history')} path="sales.*" icon={Icons.Resep} label="Riwayat Penjualan" />
-                            <NavItem href={route('prescriptions.index')} path="prescriptions.*" icon={Icons.Resep} label="Resep Masuk" />
-                        </>
+                        <NavGroup id="transaction" label="Transaksi & Layanan" icon={Icons.POS}>
+                            <SubNavItem href={route('pos.index')} path="pos.*" label="Kasir (POS)" />
+                            <SubNavItem href={route('prescriptions.index')} path="prescriptions.*" label="Resep Masuk" />
+                            <SubNavItem href={route('sales.history')} path="sales.*" label="Riwayat Penjualan" />
+                        </NavGroup>
                     )}
-                    {['apoteker', 'admin', 'superadmin'].includes(userRole) && (
-                        <>
-                            <NavItem href={route('products.index')} path="products.*" icon={Icons.Inventaris} label="Products" />
-                            <NavItem href={route('purchases.index')} path="purchases.*" icon={Icons.Pembelian} label="Pembelian" />
-                            <NavItem href={route('suppliers.index')} path="suppliers.*" icon={Icons.Supplier} label="Supplier" />
-                            <NavItem href={route('racks.index')} path="racks.*" icon={Icons.LokasiRak} label="Lokasi Rak" />
-                        </>
-                    )}
-                    {['admin', 'superadmin'].includes(userRole) && (
-                        <>
-                            {/* LINK LAPORAN TELAH DIPERBAIKI DI BAWAH INI */}
-                            <NavItem href={route('reports.index')} path="reports.*" icon={Icons.Laporan} label="Laporan" />
-                            <NavItem href={route('audit-logs.index')} path="audit-logs.*" icon={Icons.Audit} label="Audit Log" />
-                            <NavItem href={route('references.index')} path="references.*" icon={Icons.Laporan} label="Data Referensi" />
-                        </>
-                    )}
-                    {userRole === 'superadmin' && (
-                        <NavItem href={route('users.index')} path="users.*" icon={Icons.Users} label="Manajemen Akun" />
+                    {['superadmin'].includes(userRole) && (
+                        <NavGroup id="system" label="Sistem & Laporan" icon={Icons.Audit}>
+                            <SubNavItem href={route('reports.index')} path="reports.*" label="Laporan Pembukuan" />
+                            <SubNavItem href={route('users.index')} path="users.*" label="Manajemen Pengguna" />
+                        </NavGroup>
                     )}
                 </nav>
 
@@ -147,6 +198,7 @@ export default function AuthenticatedLayout({ header, children }) {
                 </div>
             </aside>
 
+            {/* AREA KONTEN UTAMA */}
             <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
                 <header className={`h-20 flex-shrink-0 flex items-center justify-between px-8 transition-colors duration-300 relative z-20
                     ${isDarkMode ? 'bg-[#1E272E] border-b border-gray-800' : 'bg-white shadow-sm'}`}>
@@ -161,7 +213,7 @@ export default function AuthenticatedLayout({ header, children }) {
                             <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="flex items-center gap-3 focus:outline-none cursor-pointer">
                                 <div className="text-right hidden md:block">
                                     <p className={`text-sm font-bold ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>{user.name}</p>
-                                    <p className="text-xs text-[#48CFA4] uppercase font-semibold">{user.role?.name || 'Apoteker'}</p>
+                                    <p className="text-xs text-[#48CFA4] uppercase font-semibold">{user.role?.name || 'Pengguna'}</p>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <div className="w-10 h-10 rounded-full bg-[#EAF5F0] border border-[#BDE8D9] flex items-center justify-center text-[#246A55] font-bold">

@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use Inertia\Inertia;
 use App\Models\Sale;
+use App\Models\SaleDetail;
 use App\Models\Purchase;
+use App\Models\PurchaseDetail;
 use App\Models\Medicine;
 use App\Exports\ReportExport;
 use Illuminate\Http\Request;
@@ -18,6 +20,7 @@ class ReportController extends Controller
         $period = $request->get('period', 'monthly'); // daily, weekly, monthly, yearly, custom
         $startDate = $request->get('start_date');
         $endDate = $request->get('end_date');
+        $medicineId = $request->get('medicine_id');
 
         if (!$startDate || !$endDate) {
             if ($period === 'daily') {
@@ -47,12 +50,15 @@ class ReportController extends Controller
 
         foreach ($salesList as $sale) {
             foreach ($sale->details as $detail) {
-                $hpp = $detail->medicine->selling_price * 0.7;
-                $totalHpp += ($detail->quantity * $hpp);
+                $hppUnit = $detail->medicine->purchase_price ?? ($detail->selling_price * 0.7);
+                $totalHpp += ($detail->quantity * $hppUnit);
             }
         }
         $profit = $totalSales - $totalHpp;
-        $lowStockCount = Medicine::whereColumn('current_stock', '<=', 'min_stock')->count();
+
+        $lowStockCount = Medicine::where('stock', '<=', 10)->count();
+
+        $stockMutations = $this->generateStockLedger($medicineId, $startDate, $endDate);
 
         $calMonth = Carbon::parse($startDate)->month;
         $calYear = Carbon::parse($startDate)->year;
@@ -70,11 +76,14 @@ class ReportController extends Controller
             ->orderBy('sale_date', 'desc')
             ->get();
 
+        $medicinesList = Medicine::where('is_active', true)->select('id', 'name', 'sku', 'stock', 'base_unit')->get();
+
         return Inertia::render('Reports/Index', [
             'filters' => [
                 'start_date' => $startDate,
                 'end_date' => $endDate,
-                'period' => $period
+                'period' => $period,
+                'medicine_id' => $medicineId
             ],
             'summary' => [
                 'total_sales' => (float) $totalSales,
@@ -86,16 +95,70 @@ class ReportController extends Controller
             'salesList' => $salesList,
             'calendarData' => $calendarData,
             'monthSales' => $monthSales,
+            'stockMutations' => $stockMutations,
+            'medicinesList' => $medicinesList,
             'calendarMonth' => Carbon::parse($startDate)->format('Y-m-d')
         ]);
     }
 
+    private function generateStockLedger($medicineId = null, $startDate, $endDate)
+    {
+        $purchasesQuery = PurchaseDetail::with(['purchase.supplier', 'medicine'])
+            ->whereHas('purchase', function($q) use ($startDate, $endDate) {
+                $q->whereBetween('purchase_date', [$startDate, $endDate]);
+            });
+
+        if ($medicineId) {
+            $purchasesQuery->where('medicine_id', $medicineId);
+        }
+
+        $purchases = $purchasesQuery->get()->map(function($item) {
+            return [
+                'date' => $item->purchase->purchase_date,
+                'medicine_id' => $item->medicine_id,
+                'medicine_name' => $item->medicine->name ?? 'Obat',
+                'sku' => $item->medicine->sku ?? '-',
+                'type' => 'IN',
+                'reference' => $item->purchase->invoice_number,
+                'description' => 'Pembelian dari Supplier: ' . ($item->purchase->supplier->name ?? 'PBF'),
+                'quantity' => (int) $item->quantity,
+                'uom' => $item->uom ?? 'Tablet',
+            ];
+        });
+
+        $salesQuery = SaleDetail::with(['sale.user', 'medicine'])
+            ->whereHas('sale', function($q) use ($startDate, $endDate) {
+                $q->whereBetween('sale_date', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
+            });
+
+        if ($medicineId) {
+            $salesQuery->where('medicine_id', $medicineId);
+        }
+
+        $sales = $salesQuery->get()->map(function($item) {
+            return [
+                'date' => $item->sale->sale_date,
+                'medicine_id' => $item->medicine_id,
+                'medicine_name' => $item->medicine->name ?? 'Obat',
+                'sku' => $item->medicine->sku ?? '-',
+                'type' => 'OUT',
+                'reference' => $item->sale->invoice_number,
+                'description' => 'Penjualan Kasir (Operator: ' . ($item->sale->user->name ?? 'Kasir') . ')',
+                'quantity' => (int) $item->quantity,
+                'uom' => $item->medicine->base_unit ?? 'Tablet',
+            ];
+        });
+
+        return $purchases->concat($sales)->sortByDesc('date')->values()->all();
+    }
+
     public function export(Request $request)
     {
-        $type = $request->get('type', 'sales'); // sales, purchase, profit, stock
+        $type = $request->get('type', 'sales'); // sales, purchase, profit, stock, mutations
         $format = $request->get('format', 'pdf'); // pdf, excel
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        $medicineId = $request->get('medicine_id');
 
         $data = [];
         $title = '';
@@ -117,18 +180,17 @@ class ReportController extends Controller
                 ->orderBy('sale_date', 'desc')->get();
         } elseif ($type === 'stock') {
             $title = 'Laporan Stok Kritis';
-            $data = Medicine::with(['category', 'supplier'])
-                ->whereColumn('current_stock', '<=', 'min_stock')
-                ->get();
+            $data = Medicine::where('stock', '<=', 10)->get();
+        } elseif ($type === 'mutations') {
+            $title = 'Laporan Mutasi & Kartu Stok Obat';
+            $data = $this->generateStockLedger($medicineId, $startDate, $endDate);
         }
 
-        // Eksekusi Download Excel
         if ($format === 'excel') {
             $fileName = 'Laporan_' . strtoupper($type) . '_' . date('Ymd') . '.xlsx';
             return Excel::download(new ReportExport($type, $data, $startDate, $endDate, $title), $fileName);
         }
 
-        // Eksekusi View PDF / Print (Membuka Tab Blade)
         return view('reports.print', compact('type', 'data', 'startDate', 'endDate', 'title'));
     }
 }

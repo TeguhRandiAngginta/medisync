@@ -1,4 +1,14 @@
-export default function PrescriptionFormHeader({ data, setData, handleImageUpload, handleDoctorChange, isScanning }) {
+import React from 'react';
+
+export default function PrescriptionFormHeader({ 
+    data, 
+    setData, 
+    handleImageUpload, 
+    handleDoctorChange, 
+    isScanning,
+    previewUrl,
+    handleScanAI 
+}) {
     return (
         <div className={`bg-white dark:bg-[#1E272E] p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm transition-all relative ${isScanning ? 'opacity-50 pointer-events-none blur-sm' : ''}`}>
             {isScanning && (
@@ -7,25 +17,85 @@ export default function PrescriptionFormHeader({ data, setData, handleImageUploa
                     Sedang Memindai Resep dengan AI...
                 </div>
             )}
-            
-            <h3 className="text-sm font-bold text-[#48CFA4] mb-4 border-b border-gray-100 dark:border-gray-800 pb-2">1. Upload & Ekstraksi AI</h3>
-            <div className="mb-6">
-                <input type="file" accept="image/*,.pdf" onChange={handleImageUpload} className="w-full text-xs text-gray-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:font-bold file:bg-[#EAF5F0] file:text-[#246A55] hover:file:bg-[#d8efe5] cursor-pointer" />
-                <p className="text-[10px] text-gray-400 mt-1">*Upload foto resep fisik apa pun formatnya untuk pengisian otomatis.</p>
+
+            <h3 className="text-sm font-bold text-[#48CFA4] mb-4 border-b border-gray-100 dark:border-gray-800 pb-2">
+                1. Upload & Ekstraksi AI
+            </h3>
+
+            <div className="mb-6 space-y-4">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    <div className="flex-1">
+                        <input 
+                            type="file" 
+                            accept="image/*,.pdf" 
+                            onChange={handleImageUpload} 
+                            className="w-full text-xs text-gray-500 dark:text-gray-400 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:font-bold file:bg-[#EAF5F0] file:text-[#246A55] dark:file:bg-[#253939] dark:file:text-[#67E2B4] hover:file:bg-[#d8efe5] cursor-pointer" 
+                        />
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={handleScanAI}
+                        disabled={!data.attachment || isScanning}
+                        className="px-6 py-2.5 bg-[#48CFA4] hover:bg-[#3AB890] text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all duration-200 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex-shrink-0"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        Ekstrak AI
+                    </button>
+                </div>
+
+                <p className="text-[10px] text-gray-400">
+                    *Pilih foto resep terlebih dahulu, lalu klik <strong>Ekstrak AI</strong> untuk pengisian otomatis.
+                </p>
+
+                {previewUrl && (
+                    <div className="mt-3 p-3 bg-gray-50 dark:bg-[#151E24] rounded-xl border border-gray-100 dark:border-gray-800 flex items-center gap-4">
+                        <div className="w-20 h-20 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 flex-shrink-0 bg-black/5">
+                            <img src={previewUrl} alt="Preview Resep" className="w-full h-full object-cover" />
+                        </div>
+                        <div>
+                            <p className="text-xs font-bold text-gray-700 dark:text-gray-300">File Pratinjau Siap</p>
+                            <p className="text-[11px] text-gray-400 mt-0.5">{data.attachment?.name}</p>
+                            <span className="inline-block mt-1 px-2 py-0.5 bg-[#EAF5F0] dark:bg-[#253939] text-[#246A55] dark:text-[#67E2B4] text-[10px] font-bold rounded-md">
+                                Klik 'Ekstrak AI' untuk memproses
+                            </span>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1">Nama Pasien</label>
-                    <input type="text" className="w-full bg-gray-50 dark:bg-[#151E24] border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2 text-sm text-gray-800 dark:text-gray-200" value={data.patient_name} onChange={e => setData('patient_name', e.target.value)} required />
+                    <input 
+                        type="text" 
+                        className="w-full bg-gray-50 dark:bg-[#151E24] border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2 text-sm text-gray-800 dark:text-gray-200" 
+                        value={data.patient_name} 
+                        onChange={e => setData('patient_name', e.target.value)} 
+                        required 
+                    />
                 </div>
                 <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1">Nama Dokter</label>
-                    <input type="text" className="w-full bg-gray-50 dark:bg-[#151E24] border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2 text-sm font-mono text-gray-800 dark:text-gray-200" value={data.doctor_name} onChange={handleDoctorChange} onBlur={handleDoctorChange} placeholder="dr. Nama" required />
+                    <input 
+                        type="text" 
+                        className="w-full bg-gray-50 dark:bg-[#151E24] border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2 text-sm font-mono text-gray-800 dark:text-gray-200" 
+                        value={data.doctor_name} 
+                        onChange={handleDoctorChange} 
+                        onBlur={handleDoctorChange} 
+                        placeholder="dr. Nama" 
+                        required 
+                    />
                 </div>
                 <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1">Tanggal</label>
-                    <input type="date" className="w-full bg-gray-50 dark:bg-[#151E24] border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2 text-sm text-gray-800 dark:text-gray-200" value={data.prescription_date} onChange={e => setData('prescription_date', e.target.value)} required />
+                    <input 
+                        type="date" 
+                        className="w-full bg-gray-50 dark:bg-[#151E24] border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2 text-sm text-gray-800 dark:text-gray-200" 
+                        value={data.prescription_date} 
+                        onChange={e => setData('prescription_date', e.target.value)} 
+                        required 
+                    />
                 </div>
             </div>
         </div>

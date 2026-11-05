@@ -1,6 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, usePage, router } from '@inertiajs/react';
-import PrimaryButton from '@/Components/PrimaryButton';
 import { useEffect, useState } from 'react';
 
 export default function Index({ purchases }) {
@@ -10,6 +9,10 @@ export default function Index({ purchases }) {
     const [printModalOpen, setPrintModalOpen] = useState(false);
     const [activePurchaseToPrint, setActivePurchaseToPrint] = useState(null);
 
+    // STATE BARU: Untuk pengelolaan pilihan checkbox (bulk delete)
+    const [selectedIds, setSelectedIds] = useState([]);
+    const [confirmingBulkDeletion, setConfirmingBulkDeletion] = useState(false);
+
     useEffect(() => {
         if (flash?.print_url) {
         }
@@ -17,6 +20,24 @@ export default function Index({ purchases }) {
 
     const formatRupiah = (number) => {
         return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number);
+    };
+
+    // Fungsi Pilih Semua Checkbox
+    const handleSelectAll = (e) => {
+        if (e.target.checked) {
+            setSelectedIds(purchases.map(p => p.id));
+        } else {
+            setSelectedIds([]);
+        }
+    };
+
+    // Fungsi Pilih Satuan Checkbox
+    const handleSelectOne = (id) => {
+        if (selectedIds.includes(id)) {
+            setSelectedIds(selectedIds.filter(item => item !== id));
+        } else {
+            setSelectedIds([...selectedIds, id]);
+        }
     };
 
     const confirmDelete = (purchase) => {
@@ -33,6 +54,16 @@ export default function Index({ purchases }) {
                 },
             });
         }
+    };
+
+    // Fungsi Hapus Massal (Bulk Delete)
+    const deleteBulkPurchases = () => {
+        router.post(route('purchases.bulk-destroy'), { ids: selectedIds }, {
+            onSuccess: () => {
+                setConfirmingBulkDeletion(false);
+                setSelectedIds([]);
+            },
+        });
     };
 
     const getStatusBadge = (status) => {
@@ -53,28 +84,56 @@ export default function Index({ purchases }) {
         <AuthenticatedLayout header="Pembelian & Barang Masuk">
             <Head title="Data Pembelian" />
 
-            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-8">
+            {/* HEADER & KELOMPOK TOMBOL AKSI */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 <div>
-                    <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Faktur Pembelian</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Pencatatan faktur supplier, nomor batch, dan expired date.</p>
+                    <h3 className="text-xl font-extrabold text-gray-800 dark:text-gray-100">Riwayat Faktur Pembelian</h3>
+                    <p className="text-xs text-gray-400 mt-0.5">Kelola data pembelian dan pantau masa kedaluwarsa obat.</p>
                 </div>
-                <div className="flex items-center gap-3">
+
+                <div className="flex items-center gap-2">
+                    {/* Tombol Hapus Massal (Muncul otomatis jika ada data yang dipilih) */}
+                    {selectedIds.length > 0 && (
+                        <button 
+                            onClick={() => setConfirmingBulkDeletion(true)}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all duration-200 shadow-md shadow-red-600/20 font-bold text-xs tracking-wide cursor-pointer animate-in fade-in"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                            <span>Hapus ({selectedIds.length})</span>
+                        </button>
+                    )}
+
                     <Link 
-                        href={route('purchases.trash')}
-                        className="flex items-center px-4 py-2.5 bg-gray-100 text-gray-600 dark:bg-[#151E24] dark:text-gray-400 rounded-xl text-sm font-bold hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 transition-colors border border-transparent dark:border-gray-800 hover:border-red-200 dark:hover:border-red-800/50"
+                        href={route('batches.index')}
+                        title="Cek Masa Kedaluwarsa (FEFO)"
+                        className="p-2.5 bg-gray-50 dark:bg-[#151E24] text-gray-600 dark:text-gray-300 hover:text-[#48CFA4] dark:hover:text-[#67E2B4] rounded-xl transition-all duration-200 border border-gray-200 dark:border-gray-700/60 flex items-center justify-center cursor-pointer shadow-sm"
                     >
-                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
-                        Lihat Tong Sampah
                     </Link>
 
-                    <PrimaryButton as="link" href={route('purchases.create')} className="rounded-xl px-4 py-2.5">
-                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path>
+                    <Link 
+                        href={route('purchases.trash')}
+                        title="Lihat Tong Sampah"
+                        className="p-2.5 bg-gray-50 dark:bg-[#151E24] text-gray-600 dark:text-gray-300 hover:text-red-500 dark:hover:text-red-400 rounded-xl transition-all duration-200 border border-gray-200 dark:border-gray-700/60 flex items-center justify-center cursor-pointer shadow-sm"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                         </svg>
-                        Catat Faktur Baru
-                    </PrimaryButton>
+                    </Link>
+
+                    <Link 
+                        href={route('purchases.create')} 
+                        title="Catat Faktur Baru"
+                        className="p-2.5 bg-[#48CFA4] text-white hover:bg-[#3bb890] rounded-md transition-colors shadow-sm dark:bg-[#253939] dark:text-[#67E2B4] dark:hover:bg-[#2d4747] dark:border dark:border-[#30413B] flex items-center justify-center cursor-pointer"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                    </Link>
                 </div>
             </div>
 
@@ -82,6 +141,14 @@ export default function Index({ purchases }) {
                 <table className="w-full text-sm text-left">
                     <thead className="text-[11px] text-gray-500 dark:text-gray-300 uppercase bg-gray-50 dark:bg-[#151E24] border-b border-gray-100 dark:border-gray-800 tracking-wider">
                         <tr>
+                            <th className="px-4 py-4 w-10 text-center">
+                                <input 
+                                    type="checkbox" 
+                                    onChange={handleSelectAll}
+                                    checked={purchases.length > 0 && selectedIds.length === purchases.length}
+                                    className="rounded border-gray-300 text-[#48CFA4] focus:ring-[#48CFA4] dark:bg-gray-800 dark:border-gray-700 cursor-pointer"
+                                />
+                            </th>
                             <th className="px-6 py-4 font-bold">No. Faktur PBF</th>
                             <th className="px-6 py-4 font-bold">Tanggal</th>
                             <th className="px-6 py-4 font-bold">Supplier</th>
@@ -93,11 +160,19 @@ export default function Index({ purchases }) {
                     <tbody>
                         {!purchases || purchases.length === 0 ? (
                             <tr>
-                                <td colSpan="6" className="px-6 py-16 text-center text-gray-400">Belum ada data faktur pembelian.</td>
+                                <td colSpan="7" className="px-6 py-16 text-center text-gray-400">Belum ada data faktur pembelian.</td>
                             </tr>
                         ) : (
                             purchases.map((purchase) => (
                                 <tr key={purchase.id} className="border-b border-gray-50 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-[#151E24] transition-colors">
+                                    <td className="px-4 py-5 text-center">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={selectedIds.includes(purchase.id)}
+                                            onChange={() => handleSelectOne(purchase.id)}
+                                            className="rounded border-gray-300 text-[#48CFA4] focus:ring-[#48CFA4] dark:bg-gray-800 dark:border-gray-700 cursor-pointer"
+                                        />
+                                    </td>
                                     <td className="px-6 py-5 font-bold text-[#48CFA4]">{purchase.invoice_number}</td>
                                     <td className="px-6 py-5 text-gray-700 dark:text-gray-200">{purchase.purchase_date}</td>
                                     <td className="px-6 py-5 font-bold text-gray-800 dark:text-gray-200">{purchase.supplier?.name || '-'}</td>
@@ -132,7 +207,7 @@ export default function Index({ purchases }) {
                 </table>
             </div>
 
-            {/* MODAL KONFIRMASI HAPUS KUSTOM */}
+            {/* MODAL KONFIRMASI HAPUS SATUAN */}
             {confirmingDeletion && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-[#1E272E] p-8 rounded-3xl shadow-2xl max-w-md w-full mx-4 border border-gray-100 dark:border-gray-800 text-center">
@@ -164,12 +239,43 @@ export default function Index({ purchases }) {
                 </div>
             )}
 
+            {/* MODAL KONFIRMASI HAPUS MASSAL (BULK DELETE) */}
+            {confirmingBulkDeletion && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-[#1E272E] p-8 rounded-3xl shadow-2xl max-w-md w-full mx-4 border border-gray-100 dark:border-gray-800 text-center">
+                        <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 flex-shrink-0">
+                            <svg className="w-8 h-8 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                        </div>
+
+                        <h3 className="text-lg font-extrabold text-gray-800 dark:text-gray-100 mb-2">Hapus {selectedIds.length} Faktur Terpilih?</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                            Semua faktur pembelian yang dicentang akan dipindahkan ke tong sampah secara bersamaan.
+                        </p>
+                        <div className="flex justify-center gap-3">
+                            <button 
+                                onClick={() => setConfirmingBulkDeletion(false)}
+                                className="px-6 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-2xl text-sm font-bold hover:bg-gray-200 transition-colors cursor-pointer"
+                            >
+                                Batal
+                            </button>
+                            <button 
+                                onClick={deleteBulkPurchases}
+                                className="px-6 py-2.5 bg-red-600 text-white rounded-2xl text-sm font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-600/30 cursor-pointer"
+                            >
+                                Ya, Hapus Semua
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* MODAL PRATINJAU & CETAK DOKUMEN */}
             {printModalOpen && activePurchaseToPrint && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 p-4 overflow-y-auto">
                     <div className="bg-white dark:bg-[#1E272E] p-6 md:p-7 rounded-3xl shadow-2xl max-w-4xl w-full border border-gray-100 dark:border-gray-800 flex flex-col my-auto">
                         
-                        {/* Header Modal */}
                         <div className="flex justify-between items-center pb-4 mb-3 border-b border-gray-100 dark:border-gray-800">
                             <div>
                                 <span className="px-3 py-1 bg-[#EAF5F0] dark:bg-[#253939] text-[#246A55] dark:text-[#67E2B4] rounded-full text-[10px] font-extrabold uppercase tracking-wider">
@@ -187,7 +293,6 @@ export default function Index({ purchases }) {
                             </button>
                         </div>
 
-                        {/* Konten Viewer PDF */}
                         <div className="w-full h-[62vh] bg-gray-100 dark:bg-[#151E24] rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-inner">
                             <iframe 
                                 id="pdf-print-iframe"
@@ -197,7 +302,6 @@ export default function Index({ purchases }) {
                             />
                         </div>
 
-                        {/* Footer Modal */}
                         <div className="flex justify-between items-center pt-4 mt-3 border-t border-gray-100 dark:border-gray-800">
                             <p className="text-xs text-gray-400 font-mono">
                                 No. Sistem: <span className="font-bold">{activePurchaseToPrint.internal_receipt_number}</span>
@@ -210,7 +314,6 @@ export default function Index({ purchases }) {
                                     Tutup
                                 </button>
 
-                                {/* Tombol Cetak Dokumen */}
                                 <button 
                                     onClick={() => {
                                         const iframe = document.getElementById('pdf-print-iframe');

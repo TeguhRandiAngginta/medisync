@@ -3,67 +3,52 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\Branch;
-use App\Models\Category;
-use App\Models\Unit;
-use App\Models\Supplier;
-use App\Models\Rack;
-use App\Models\Product;
-use App\Models\ProductUnit;
+use App\Models\LocationType;
+use App\Models\SupplierType;
+use App\Models\MedicineCategory;
 
 class MasterDataSeeder extends Seeder
 {
     public function run(): void
     {
-        $branch = Branch::first();
+        // 1. Tipe Lokasi Penyimpanan (Untuk Rak / Etalase)
+        LocationType::firstOrCreate(['prefix_code' => 'ET'], [
+            'name' => 'Etalase Depan', 
+            'intended_for' => 'Kasir / Etalase Penjualan', 
+            'description' => 'Area pajangan obat bagian depan'
+        ]);
+        LocationType::firstOrCreate(['prefix_code' => 'GD'], [
+            'name' => 'Gudang Utama', 
+            'intended_for' => 'Penyimpanan Stok Besar', 
+            'description' => 'Area penyimpanan stok gudang belakang'
+        ]);
 
-        // 1. Kategori
-        $catBebas = Category::firstOrCreate(['slug' => 'obat-bebas'], ['name' => 'Obat Bebas', 'description' => 'Obat tanpa resep dokter']);
-        $catKeras = Category::firstOrCreate(['slug' => 'obat-keras'], ['name' => 'Obat Keras', 'description' => 'Harus dengan resep dokter']);
-        $catAlkes = Category::firstOrCreate(['slug' => 'alkes'], ['name' => 'Alat Kesehatan', 'description' => 'Perlengkapan medis']);
+        // 2. Tipe Pemasok / Supplier
+        SupplierType::firstOrCreate(['prefix_code' => 'PBF'], [
+            'name' => 'PBF Utama', 
+            'description' => 'Pedagang Besar Farmasi Skala Nasional'
+        ]);
+        SupplierType::firstOrCreate(['prefix_code' => 'LOK'], [
+            'name' => 'Distributor Lokal', 
+            'description' => 'Distributor atau agen wilayah lokal'
+        ]);
 
-        // 2. Satuan Dasar & Besar
-        $unitTab = Unit::firstOrCreate(['symbol' => 'TAB'], ['name' => 'Tablet']);
-        $unitStrip = Unit::firstOrCreate(['symbol' => 'STR'], ['name' => 'Strip']);
-        $unitBox = Unit::firstOrCreate(['symbol' => 'BOX'], ['name' => 'Box']);
-        $unitPcs = Unit::firstOrCreate(['symbol' => 'PCS'], ['name' => 'Pieces']);
-
-        // 3. Rak Penyimpanan
-        $rackDepan = Rack::firstOrCreate(['code' => 'RAK-A1', 'branch_id' => $branch->id], ['name' => 'Etalase Depan', 'description' => 'Area Kasir']);
-        $rackGudang = Rack::firstOrCreate(['code' => 'GDG-01', 'branch_id' => $branch->id], ['name' => 'Gudang Belakang', 'description' => 'Stok Utama']);
-
-        // 4. Supplier
-        $supplier = Supplier::firstOrCreate(
-            ['code' => 'SPL-001'],
-            ['name' => 'PT. Bina San Prima', 'contact_person' => 'Budi', 'phone' => '081299998888']
-        );
-
-
-        $product1 = Product::firstOrCreate(
-            ['sku' => '8991234567890'],
-            [
-                'category_id' => $catBebas->id,
-                'base_unit_id' => $unitTab->id,
-                'name' => 'Paracetamol 500mg',
-                'type' => 'obat_bebas',
-                'description' => 'Obat penurun panas dan pereda nyeri',
-            ]
-        );
-
-
-        ProductUnit::firstOrCreate(
-            ['product_id' => $product1->id, 'unit_id' => $unitTab->id],
-            ['conversion_factor' => 1, 'purchase_price' => 200, 'selling_price' => 500, 'is_default_sales' => true]
-        );
-
-        ProductUnit::firstOrCreate(
-            ['product_id' => $product1->id, 'unit_id' => $unitStrip->id],
-            ['conversion_factor' => 10, 'purchase_price' => 1800, 'selling_price' => 4500]
-        );
-
-        ProductUnit::firstOrCreate(
-            ['product_id' => $product1->id, 'unit_id' => $unitBox->id],
-            ['conversion_factor' => 100, 'purchase_price' => 17000, 'selling_price' => 40000, 'is_default_purchase' => true]
-        );
+        // 3. Golongan / Kategori Obat Standar BPOM
+        MedicineCategory::firstOrCreate(['name' => 'Obat Bebas'], [
+            'description' => 'Dapat dibeli bebas tanpa resep (Lingkaran Hijau)', 
+            'is_active' => true
+        ]);
+        MedicineCategory::firstOrCreate(['name' => 'Obat Bebas Terbatas'], [
+            'description' => 'Bebas terbatas dengan tanda peringatan (Lingkaran Biru)', 
+            'is_active' => true
+        ]);
+        MedicineCategory::firstOrCreate(['name' => 'Obat Keras'], [
+            'description' => 'Hanya dengan resep dokter (Lingkaran Merah dengan huruf K)', 
+            'is_active' => true
+        ]);
+        MedicineCategory::firstOrCreate(['name' => 'Obat Paten / Bermerek'], [
+            'description' => 'Obat dengan hak paten produsen farmasi', 
+            'is_active' => true
+        ]);
     }
 }

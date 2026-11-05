@@ -33,15 +33,31 @@ export default function CartSidebar({
                                     <div className="flex flex-col">
                                         <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{item.name}</span>
                                         {item.signa && <span className="text-[10px] text-[#48CFA4] font-bold">Resep: {item.signa}</span>}
+                                        <span className="text-[10px] text-gray-400">Maksimal stok: {item.max_stock} {item.base_unit || ''}</span>
                                     </div>
-                                    <button onClick={() => removeFromCart(item.medicine_id)} className="text-red-400 hover:text-red-600 cursor-pointer">✕</button>
+                                    <button onClick={() => removeFromCart(item.medicine_id)} className="text-red-400 hover:text-red-600 cursor-pointer text-sm font-bold">✕</button>
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-xs text-gray-500 font-mono font-bold">{formatRupiah(item.price)}</span>
                                     <div className="flex items-center gap-2 bg-gray-50 dark:bg-[#151E24] p-1 rounded-lg">
-                                        <button onClick={() => updateQuantity(item.medicine_id, item.quantity - 1)} className="w-6 h-6 rounded bg-gray-200 dark:bg-gray-700 font-bold cursor-pointer hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">-</button>
+                                        {/* Tombol Kurangi (-) */}
+                                        <button 
+                                            onClick={() => updateQuantity(item.medicine_id, item.quantity - 1)} 
+                                            className="w-6 h-6 rounded bg-gray-200 dark:bg-gray-700 font-bold cursor-pointer hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center justify-center text-xs"
+                                        >
+                                            -
+                                        </button>
+
                                         <span className="text-xs font-bold w-6 text-center text-gray-800 dark:text-gray-200">{item.quantity}</span>
-                                        <button onClick={() => updateQuantity(item.medicine_id, item.quantity + 1)} className="w-6 h-6 rounded bg-gray-200 dark:bg-gray-700 font-bold cursor-pointer hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">+</button>
+
+                                        {/* Tombol Tambah (+), dikunci jika melebihi max_stock */}
+                                        <button 
+                                            onClick={() => updateQuantity(item.medicine_id, item.quantity + 1)} 
+                                            disabled={item.quantity >= item.max_stock}
+                                            className="w-6 h-6 rounded bg-gray-200 dark:bg-gray-700 font-bold cursor-pointer hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center justify-center text-xs disabled:opacity-30 disabled:cursor-not-allowed"
+                                        >
+                                            +
+                                        </button>
                                     </div>
                                 </div>
                             </div>

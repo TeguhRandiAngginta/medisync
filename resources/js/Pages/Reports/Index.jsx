@@ -4,16 +4,28 @@ import { useState } from 'react';
 import ExportModal from './Components/ExportModal';
 import ReportTable from './Components/ReportTable';
 import ReportCalendar from './Components/ReportCalendar';
+import ReportStockLedger from './Components/ReportStockLedger';
 
 const formatRupiah = (number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number);
 
-export default function Index({ auth, filters, summary, salesList, calendarData, monthSales, calendarMonth, currentDate }) {
+export default function Index({ 
+    auth, 
+    filters, 
+    summary, 
+    salesList, 
+    calendarData, 
+    monthSales, 
+    calendarMonth, 
+    currentDate,
+    stockMutations,
+    medicinesList 
+}) {
     const [startDate, setStartDate] = useState(filters?.start_date || currentDate);
     const [endDate, setEndDate] = useState(filters?.end_date || currentDate);
-    const [activeView, setActiveView] = useState('table'); 
+    const [selectedMedicineId, setSelectedMedicineId] = useState(filters?.medicine_id || '');
+    const [activeView, setActiveView] = useState('table'); // 'table' | 'calendar' | 'ledger'
     const [selectedDate, setSelectedDate] = useState(null);
     
-    // State Modal Export & Custom Notification
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [exportFormat, setExportFormat] = useState('pdf');
     const [selectedReportType, setSelectedReportType] = useState('sales');
@@ -37,7 +49,12 @@ export default function Index({ auth, filters, summary, salesList, calendarData,
                 params = { ...params, start_date: formatD(today), end_date: formatD(today) };
             } 
         } else if (period === 'custom') {
-            params = { ...params, start_date: startDate, end_date: endDate };
+            params = { 
+                ...params, 
+                start_date: startDate, 
+                end_date: endDate,
+                medicine_id: selectedMedicineId 
+            };
         }
         
         router.get(route('reports.index'), params, { preserveState: true });
@@ -83,7 +100,8 @@ export default function Index({ auth, filters, summary, salesList, calendarData,
             type: selectedReportType,
             format: exportFormat,
             start_date: startDate,
-            end_date: endDate
+            end_date: endDate,
+            medicine_id: selectedMedicineId
         });
 
         if (exportFormat === 'pdf') {
@@ -119,17 +137,14 @@ export default function Index({ auth, filters, summary, salesList, calendarData,
 
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div>
-                        <h2 className="text-2xl font-extrabold text-gray-900 dark:text-white">Laporan & Rekapitulasi</h2>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Medisync — Kelola dan ekspor data keuangan apotek Anda.</p>
+                        <h2 className="text-2xl font-extrabold text-gray-900 dark:text-white">Laporan & Audit Mutasi Stok</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Medisync — Pantau arus kas, laba rugi, dan kartu mutasi stok obat.</p>
                     </div>
 
                     <button 
-                        onClick={() => setIsExportModalOpen(true)}
-                        className="flex items-center gap-2 bg-[#48CFA4] hover:bg-[#3bb790] text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all cursor-pointer"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                        Export Laporan
-                    </button>
+                    onClick={() => setIsExportModalOpen(true)}
+                    className="px-6 py-2.5 rounded-md text-sm font-bold flex items-center justify-center gap-2 transition-all duration-200 bg-[#48CFA4] text-white hover:bg-[#3bb890] shadow-sm dark:bg-[#253939] dark:text-[#67E2B4] dark:hover:bg-[#2d4747] dark:border dark:border-[#30413B] dark:shadow-none cursor-pointer">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>Export Laporan</button>
                 </div>
 
                 <div className="bg-white dark:bg-[#1E272E] p-4 rounded-[20px] border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col xl:flex-row justify-between items-center gap-4">
@@ -145,7 +160,19 @@ export default function Index({ auth, filters, summary, salesList, calendarData,
                         ))}
                     </div>
                     
-                    <div className="flex items-center gap-2 w-full xl:w-auto">
+                    <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+                        {activeView === 'ledger' && (
+                            <select 
+                                value={selectedMedicineId} 
+                                onChange={e => setSelectedMedicineId(e.target.value)}
+                                className="px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#151E24] text-gray-700 dark:text-gray-200 font-medium"
+                            >
+                                <option value="">-- Semua Obat Master --</option>
+                                {(medicinesList || []).map(m => (
+                                    <option key={m.id} value={m.id}>{m.sku} - {m.name}</option>
+                                ))}
+                            </select>
+                        )}
                         <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#151E24] text-gray-700 dark:text-gray-200" />
                         <span className="text-gray-400 text-xs">s/d</span>
                         <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#151E24] text-gray-700 dark:text-gray-200" />
@@ -178,21 +205,45 @@ export default function Index({ auth, filters, summary, salesList, calendarData,
 
                 <div className="bg-white dark:bg-[#1E272E] rounded-[24px] border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden mt-6">
                     <div className="border-b border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row justify-between items-center px-6 py-4 gap-4 bg-gray-50/50 dark:bg-[#151E24]/30">
-                        <h3 className="text-sm font-extrabold text-gray-900 dark:text-white">Rincian Data</h3>
+                        <h3 className="text-sm font-extrabold text-gray-900 dark:text-white">
+                            {activeView === 'table' && 'Tabel Transaksi Penjualan'}
+                            {activeView === 'calendar' && 'Kalender Omzet Penjualan'}
+                            {activeView === 'ledger' && 'Kartu Stok & Mutasi Obat (Audit Trail)'}
+                        </h3>
                         
                         <div className="flex bg-gray-100 dark:bg-[#151E24] p-1.5 rounded-xl gap-1">
-                            <button onClick={() => setActiveView('table')} className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 cursor-pointer ${activeView === 'table' ? 'bg-white dark:bg-[#1E272E] text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                            <button 
+                                onClick={() => setActiveView('table')} 
+                                title="Tabel Penjualan"
+                                className={`px-3 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${activeView === 'table' ? 'bg-white dark:bg-[#1E272E] text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                                Transaksi
                             </button>
-                            <button onClick={() => setActiveView('calendar')} className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 cursor-pointer ${activeView === 'calendar' ? 'bg-white dark:bg-[#1E272E] text-[#48CFA4] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+
+                            <button 
+                                onClick={() => setActiveView('calendar')} 
+                                title="Kalender Omzet"
+                                className={`px-3 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${activeView === 'calendar' ? 'bg-white dark:bg-[#1E272E] text-[#48CFA4] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                Kalender
+                            </button>
+
+                            <button 
+                                onClick={() => setActiveView('ledger')} 
+                                title="Kartu Stok Obat"
+                                className={`px-3 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${activeView === 'ledger' ? 'bg-white dark:bg-[#1E272E] text-amber-500 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                Mutasi Stok
                             </button>
                         </div>
                     </div>
 
-                    {activeView === 'table' ? (
-                        <ReportTable salesList={salesList} formatRupiah={formatRupiah} />
-                    ) : (
+                    {activeView === 'table' && <ReportTable salesList={salesList} formatRupiah={formatRupiah} />}
+                    
+                    {activeView === 'calendar' && (
                         <ReportCalendar 
                             calendarMonth={calendarMonth}
                             calendarData={calendarData}
@@ -201,6 +252,10 @@ export default function Index({ auth, filters, summary, salesList, calendarData,
                             monthSales={monthSales}
                             formatRupiah={formatRupiah}
                         />
+                    )}
+
+                    {activeView === 'ledger' && (
+                        <ReportStockLedger stockMutations={stockMutations} />
                     )}
                 </div>
 
