@@ -46,4 +46,9 @@ class Medicine extends Model
     {
         return $this->belongsTo(Rack::class);
     }
+
+    public function batches()
+    {
+        return $this->hasMany(ProductBatch::class, 'product_id', 'id');
+    }
 }

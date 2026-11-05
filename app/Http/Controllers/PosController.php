@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Medicine;
+use App\Models\ProductBatch;
 use App\Models\Sale;
 use App\Models\SaleDetail;
 use App\Models\AuditLog;
@@ -16,12 +17,21 @@ class PosController extends Controller
     public function index()
     {
         $medicines = Medicine::where('is_active', true)
-            ->select('id', 'sku', 'barcode', 'name', 'base_unit', 'selling_price')
+            ->with(['batches' => function($query) {
+                $query->where('stock_quantity', '>', 0);
+            }])
+            ->select('id', 'sku', 'barcode', 'name', 'base_unit', 'selling_price', 'stock')
             ->get()
             ->map(function ($medicine) {
-                $medicine->stock = 50; 
+                $realBatchStock = $medicine->batches->sum('stock_quantity');
+                
+                $medicine->stock = (int) $realBatchStock;
+                $medicine->selling_price = (float) $medicine->selling_price;
+
+                unset($medicine->batches);
                 return $medicine;
-            });
+            })
+            ->values();
 
         return Inertia::render('Pos/Index', [
             'medicines' => $medicines
@@ -44,6 +54,22 @@ class PosController extends Controller
 
         DB::beginTransaction();
         try {
+            foreach ($request->cart as $item) {
+                $medicine = Medicine::where('id', $item['medicine_id'])->lockForUpdate()->first();
+                
+                if (!$medicine) {
+                    throw new \Exception("Obat dengan ID {$item['medicine_id']} tidak ditemukan.");
+                }
+
+                $totalBatchStock = ProductBatch::where('product_id', $item['medicine_id'])
+                    ->where('stock_quantity', '>', 0)
+                    ->sum('stock_quantity');
+
+                if ($totalBatchStock < $item['quantity']) {
+                    throw new \Exception("Stok aktif untuk '{$medicine->name}' tidak mencukupi! Sisa stok tersedia: {$totalBatchStock} {$medicine->base_unit}. Silakan sesuaikan jumlah pembelian.");
+                }
+            }
+
             $invoiceNumber = 'INV-' . date('Ymd') . '-' . strtoupper(Str::random(5));
             
             $sale = Sale::create([
@@ -59,18 +85,46 @@ class PosController extends Controller
             ]);
 
             foreach ($request->cart as $item) {
-                SaleDetail::create([
-                    'sale_id' => $sale->id,
-                    'medicine_id' => $item['medicine_id'],
-                    'batch_number' => 'AUTO-FEFO',
-                    'quantity' => $item['quantity'],
-                    'selling_price' => $item['price'],
-                    'subtotal' => $item['price'] * $item['quantity'],
-                ]);
+                $quantityNeeded = $item['quantity'];
+
+                $batches = ProductBatch::where('product_id', $item['medicine_id'])
+                    ->where('stock_quantity', '>', 0)
+                    ->orderBy('expired_date', 'asc')
+                    ->lockForUpdate()
+                    ->get();
+
+                foreach ($batches as $batch) {
+                    if ($quantityNeeded <= 0) break;
+
+                    if ($batch->stock_quantity >= $quantityNeeded) {
+                        $deductQty = $quantityNeeded;
+                        $batch->decrement('stock_quantity', $deductQty);
+                        $quantityNeeded = 0;
+                    } else {
+                        $deductQty = $batch->stock_quantity;
+                        $batch->update(['stock_quantity' => 0]);
+                        $quantityNeeded -= $deductQty;
+                    }
+
+                    SaleDetail::create([
+                        'sale_id' => $sale->id,
+                        'medicine_id' => $item['medicine_id'],
+                        'batch_number' => $batch->batch_number,
+                        'quantity' => $deductQty,
+                        'selling_price' => $item['price'],
+                        'subtotal' => $item['price'] * $deductQty,
+                    ]);
+                }
+
+                $medicine = Medicine::find($item['medicine_id']);
+                if ($medicine) {
+                    $remainingStock = ProductBatch::where('product_id', $medicine->id)->sum('stock_quantity');
+                    $medicine->update(['stock' => $remainingStock]);
+                }
             }
 
             if (class_exists(AuditLog::class)) {
-                AuditLog::record('pos', 'CREATE', "Transaksi kasir berhasil: {$invoiceNumber} via {$request->payment_method} senilai Rp" . number_format($subtotal, 0, ',', '.'));
+                AuditLog::record('pos', 'CREATE', "Transaksi kasir berhasil dengan FEFO: {$invoiceNumber} via {$request->payment_method} senilai Rp" . number_format($subtotal, 0, ',', '.'));
             }
 
             DB::commit();
@@ -82,7 +136,7 @@ class PosController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->withErrors(['message' => 'Gagal memproses transaksi: ' . $e->getMessage()]);
+            return back()->withErrors(['message' => $e->getMessage()]);
         }
     }
 

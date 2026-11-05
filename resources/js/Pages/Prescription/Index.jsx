@@ -36,10 +36,13 @@ export default function Index({ prescriptions }) {
     return (
         <AuthenticatedLayout header="Manajemen Resep Masuk">
             <Head title="Daftar Resep" />
-
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-extrabold text-gray-800 dark:text-gray-200">Riwayat Resep Masuk</h2>
-                <Link href={route('prescriptions.create')} title="Catat Resep Baru" className="p-2.5 bg-[#48CFA4] hover:bg-[#3AB890] text-white rounded-xl shadow-md transition-colors flex items-center gap-2 px-4 text-sm font-bold">
+                <Link 
+                    href={route('prescriptions.create')} 
+                    title="Catat Resep Baru" 
+                    className="px-6 py-2.5 rounded-md text-sm font-bold flex items-center justify-center gap-2 transition-all duration-200 bg-[#48CFA4] text-white hover:bg-[#3bb890] shadow-sm dark:bg-[#253939] dark:text-[#67E2B4] dark:hover:bg-[#2d4747] dark:border dark:border-[#30413B] dark:shadow-none"
+                >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
                     <span>Input Resep Baru</span>
                 </Link>
@@ -57,7 +60,7 @@ export default function Index({ prescriptions }) {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                            {prescriptions.length === 0 ? (
+                            {(!prescriptions || prescriptions.length === 0) ? (
                                 <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-400 font-bold">Belum ada resep masuk.</td></tr>
                             ) : (
                                 prescriptions.map((resep) => (

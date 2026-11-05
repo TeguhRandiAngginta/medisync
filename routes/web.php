@@ -12,66 +12,67 @@ use Inertia\Inertia;
 
 Route::redirect('/', '/login');
 
-Route::middleware('auth')->group(function () {
+// Akses Dasar untuk Semua Role yang Login
+Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     
-    // Profile
+    // Profile Management
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    // Purchases (Trash & Resource)
+    // POS & Penjualan (Bisa diakses Superadmin, Apoteker, dan Kasir)
+    Route::middleware('role:superadmin,apoteker,kasir')->group(function () {
+        Route::get('/pos', [App\Http\Controllers\PosController::class, 'index'])->name('pos.index');
+        Route::post('/pos', [App\Http\Controllers\PosController::class, 'store'])->name('pos.store');
+        Route::get('/pos/receipt/{invoice}', [App\Http\Controllers\PosController::class, 'printReceipt'])->name('pos.receipt');
+        
+        // Sales History 
+        Route::get('/sales-history', [SalesHistoryController::class, 'index'])->name('sales.history');
+        Route::get('/sales-history/trash', [SalesHistoryController::class, 'trash'])->name('sales.trash');
+        Route::delete('/sales-history/{id}', [SalesHistoryController::class, 'destroy'])->name('sales.destroy');
+        Route::post('/sales-history/{id}/restore', [SalesHistoryController::class, 'restore'])->name('sales.restore');
+        Route::delete('/sales-history/{id}/force-delete', [SalesHistoryController::class, 'forceDelete'])->name('sales.force-delete');
+        
+        // Prescriptions (Ekstraksi AI Resep Masuk)
+        Route::post('/api/prescriptions/analyze', [PrescriptionController::class, 'analyzeImage'])->name('api.prescriptions.analyze');
+        Route::get('/api/prescriptions/{number}', [PrescriptionController::class, 'getForPos'])->name('api.prescriptions.get');
+        Route::resource('prescriptions', PrescriptionController::class)->except(['show', 'edit', 'update']);
+        Route::get('/prescriptions/{prescription}/edit', [PrescriptionController::class, 'edit'])->name('prescriptions.edit');
+        Route::put('/prescriptions/{prescription}', [PrescriptionController::class, 'update'])->name('prescriptions.update');
+    });
+});
+
+// Akses Terbatas (Hanya untuk Superadmin dan Apoteker) - Kasir Dilarang Masuk!
+Route::middleware(['auth', 'verified', 'role:superadmin,apoteker'])->group(function () {
+    // Inventory & Purchases (Pembelian PBF)
     Route::get('purchases/trash', [PurchaseController::class, 'trash'])->name('purchases.trash');
+    Route::post('purchases/bulk-destroy', [PurchaseController::class, 'bulkDestroy'])->name('purchases.bulk-destroy');
     Route::post('purchases/{id}/restore', [PurchaseController::class, 'restore'])->name('purchases.restore');
     Route::delete('purchases/{id}/force-delete', [PurchaseController::class, 'forceDelete'])->name('purchases.force-delete');
     Route::get('purchases/{purchase}/print', [PurchaseController::class, 'printPdf'])->name('purchases.print');
     Route::resource('purchases', PurchaseController::class);
 
-    // POS & Penjualan
-    Route::get('/pos', [App\Http\Controllers\PosController::class, 'index'])->name('pos.index');
-    Route::post('/pos', [App\Http\Controllers\PosController::class, 'store'])->name('pos.store');
-    Route::get('/pos/receipt/{invoice}', [App\Http\Controllers\PosController::class, 'printReceipt'])->name('pos.receipt');
-
-    // Prescriptions (AI Analyze, Resource, & POS API)
-    Route::post('/api/prescriptions/analyze', [PrescriptionController::class, 'analyzeImage'])->name('api.prescriptions.analyze');
-    Route::get('/api/prescriptions/{number}', [PrescriptionController::class, 'getForPos'])->name('api.prescriptions.get');
-
-    // Resource standard 
-    Route::resource('prescriptions', PrescriptionController::class)->except(['show', 'edit', 'update']);
-
-    // Rute Edit & Update Tambahan untuk Fitur Koreksi Resep
-    Route::get('/prescriptions/{prescription}/edit', [PrescriptionController::class, 'edit'])->name('prescriptions.edit');
-    Route::put('/prescriptions/{prescription}', [PrescriptionController::class, 'update'])->name('prescriptions.update');
-
-    // Sales History (Trash & Management)
-    Route::get('/sales-history', [SalesHistoryController::class, 'index'])->name('sales.history');
-    Route::get('/sales-history/trash', [SalesHistoryController::class, 'trash'])->name('sales.trash');
-    Route::delete('/sales-history/{id}', [SalesHistoryController::class, 'destroy'])->name('sales.destroy');
-    Route::post('/sales-history/{id}/restore', [SalesHistoryController::class, 'restore'])->name('sales.restore');
-    Route::delete('/sales-history/{id}/force-delete', [SalesHistoryController::class, 'forceDelete'])->name('sales.force-delete');
-});
-
-// Grup Middleware Superadmin, Apoteker, Kasir, Admin
-Route::middleware(['auth', 'verified', 'role:superadmin,apoteker,kasir,admin'])->group(function () {
-
-    // Products
+    // Products / Katalog Obat
     Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
     Route::resource('products', ProductController::class);
 
-    // Suppliers
+    // Data Master Tambahan (Suppliers & Racks)
     Route::resource('suppliers', App\Http\Controllers\SupplierController::class);
-
-    // Racks
     Route::resource('racks', App\Http\Controllers\RackController::class);
 
-    // Laporan
+    // Monitoring Batch & FEFO
+    Route::get('/product-batches', [App\Http\Controllers\PurchaseController::class, 'batchesIndex'])->name('batches.index');
+});
+
+// Akses Absolut / Eksekutif (Hanya untuk Superadmin) - Apoteker dan Kasir Dilarang Masuk!
+Route::middleware(['auth', 'verified', 'role:superadmin'])->group(function () {
+    // Laporan & Audit Stok
     Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
     Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
-
-    // Audit Logs
     Route::get('/audit-logs', [App\Http\Controllers\AuditLogController::class, 'index'])->name('audit-logs.index');
 
-    // Data Referensi
+    // Data Referensi Master Kategori & Tipe
     Route::get('/references', [App\Http\Controllers\ReferenceController::class, 'index'])->name('references.index');
     Route::post('/references/location-types', [App\Http\Controllers\ReferenceController::class, 'storeLocationType'])->name('references.location-types.store');
     Route::put('/references/location-types/{locationType}', [App\Http\Controllers\ReferenceController::class, 'updateLocationType'])->name('references.location-types.update');
@@ -85,10 +86,8 @@ Route::middleware(['auth', 'verified', 'role:superadmin,apoteker,kasir,admin'])-
     Route::put('/references/medicine-categories/{medicineCategory}', [App\Http\Controllers\ReferenceController::class, 'updateMedicineCategory'])->name('references.medicine-categories.update');
     Route::delete('/references/medicine-categories/{medicineCategory}', [App\Http\Controllers\ReferenceController::class, 'destroyMedicineCategory'])->name('references.medicine-categories.destroy');
 
-    // Manajemen Akun (Khusus Superadmin)
-    Route::middleware(['role:superadmin'])->group(function () {
-        Route::resource('users', App\Http\Controllers\UserController::class);
-    });
+    // Manajemen Pengguna
+    Route::resource('users', App\Http\Controllers\UserController::class);
 });
 
 require __DIR__.'/auth.php';

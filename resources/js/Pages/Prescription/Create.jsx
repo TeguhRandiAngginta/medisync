@@ -1,6 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import PrescriptionFormHeader from '@/Components/Prescription/PrescriptionFormHeader';
 import PrescriptionItemManager from '@/Components/Prescription/PrescriptionItemManager';
 import CustomAlertModal from '@/Components/Prescription/CustomAlertModal';
@@ -18,12 +18,19 @@ export default function Create({ medicines }) {
     const [isScanning, setIsScanning] = useState(false);
     const [customAlert, setCustomAlert] = useState({ show: false, message: '', type: 'error' });
     const [unmatchedMedicines, setUnmatchedMedicines] = useState([]);
+    const [previewUrl, setPreviewUrl] = useState(null);
 
     const [selectedMedicine, setSelectedMedicine] = useState('');
     const [quantity, setQuantity] = useState(1);
     const [signaFreq, setSignaFreq] = useState('3 x 1');
     const [signaForm, setSignaForm] = useState('Tablet');
     const [signaTime, setSignaTime] = useState('Sesudah Makan');
+
+    useEffect(() => {
+        return () => {
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+        };
+    }, [previewUrl]);
 
     const formatDoctorName = (name) => {
         let clean = name.replace(/^(dr\.|dr|Dr\.|Dr|drs\.|Drs\.)\s*/i, '').trim();
@@ -34,10 +41,27 @@ export default function Create({ medicines }) {
         setData('doctor_name', formatDoctorName(e.target.value));
     };
 
-    const handleImageUpload = async (e) => {
+    // MURNI PILIH FILE & PREVIEW (TIDAK MEMANGGIL AI)
+    const handleImageUpload = (e) => {
         const file = e.target.files[0];
-        setData('attachment', file);
         if (!file) return;
+        
+        setData('attachment', file);
+        setPreviewUrl(URL.createObjectURL(file));
+    };
+
+    // PROSES AI BERJALAN HANYA KETIKA TOMBOL "EKSTRAK AI" DIKLIK MANUSIA
+    const handleScanAI = async (e) => {
+        if (e) e.preventDefault(); 
+        
+        const file = data.attachment;
+        if (!file) {
+            return setCustomAlert({ 
+                show: true, 
+                message: 'Harap pilih file gambar resep terlebih dahulu!', 
+                type: 'error' 
+            });
+        }
 
         const cacheKey = `medisync_ocr_cache_${file.name}_${file.size}`;
         const cachedData = localStorage.getItem(cacheKey);
@@ -48,7 +72,7 @@ export default function Create({ medicines }) {
                 processAiResult(parsedData);
                 setCustomAlert({ 
                     show: true, 
-                    message: 'Data resep dimuat secara instan dari memori lokal (Cache aktif, kuota AI dihemat)!', 
+                    message: 'Data resep dimuat dari memori lokal (Cache aktif)!', 
                     type: 'success' 
                 });
                 return;
@@ -71,69 +95,96 @@ export default function Create({ medicines }) {
                     throw new Error("Kunci VITE_GEMINI_API_KEY belum dipasang di file .env!");
                 }
 
-                const prompt = `Anda adalah sistem OCR apotek. Analisis gambar resep ini. Daftar obat di database kami: ${JSON.stringify(medicines.map(m => m.name))}.
+                const prompt = `Anda adalah sistem OCR apotek. Analisis gambar resep dokter ini. Daftar obat yang ada di database apotek kami: ${JSON.stringify(medicines.map(m => m.name))}.
                 Tugas:
                 1. Ekstrak patient_name, doctor_name (format 'dr. Nama'), prescription_date (YYYY-MM-DD).
-                2. Ekstrak items [{name, quantity, signa}]. 
-                KEMBALIKAN HANYA JSON MENTAH TANPA MARKDOWN.`;
+                2. Ekstrak items [{name, quantity, signa}].
+                KEMBALIKAN HANYA FORMAT JSON MENTAH TANPA MARKDOWN.`;
 
-                let response = null;
-                let aiData = null;
-                let maxRetries = 3;
+                let parsedData = null;
+                let usedModelName = '';
+                let lastErrorMessage = '';
 
-                for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            contents: [{
-                                parts: [
-                                    { text: prompt },
-                                    { inlineData: { mimeType, data: base64String } }
-                                ]
-                            }]
-                        })
-                    });
-
-                    aiData = await response.json();
-                    if (response.ok) break;
-
-                    if (response.status === 503 && attempt < maxRetries) {
-                        await new Promise(resolve => setTimeout(resolve, 2000));
-                        continue;
+                let activeModels = [];
+                try {
+                    const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+                    if (listRes.ok) {
+                        const listData = await listRes.json();
+                        activeModels = (listData.models || [])
+                            .filter(m => 
+                                m.supportedGenerationMethods?.includes('generateContent') &&
+                                (m.name.includes('flash') || m.name.includes('pro')) &&
+                                !m.name.includes('tts') && 
+                                !m.name.includes('audio') && 
+                                !m.name.includes('gemma')
+                            )
+                            .map(m => m.name.replace('models/', ''));
                     }
-                    throw new Error(aiData.error?.message || "Gagal terhubung ke Google AI");
+                } catch (e) {
+                    console.warn("Gagal mengambil daftar model dinamis, memakai fallback bawaan.", e);
                 }
 
-                if (!response.ok || !aiData.candidates || !aiData.candidates[0].content) {
-                    throw new Error("Batas kuota harian AI telah habis (429/503) atau server sibuk. Silakan gunakan Cache atau input manual.");
+                if (activeModels.length === 0) {
+                    activeModels = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-1.5-pro'];
                 }
 
-                const textRaw = aiData.candidates[0].content.parts[0].text;
-                const textClean = textRaw.replace(/```json/g, '').replace(/```/g, '').trim();
-                const parsedData = JSON.parse(textClean);
+                for (const model of activeModels) {
+                    const apiVersions = ['v1beta', 'v1'];
+                    let success = false;
+
+                    for (const apiVer of apiVersions) {
+                        try {
+                            const response = await fetch(`https://generativelanguage.googleapis.com/${apiVer}/models/${model}:generateContent?key=${apiKey}`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    contents: [{
+                                        parts: [
+                                            { text: prompt },
+                                            { inlineData: { mimeType, data: base64String } }
+                                        ]
+                                    }]
+                                })
+                            });
+
+                            const aiData = await response.json();
+
+                            if (response.ok && aiData.candidates && aiData.candidates[0]?.content) {
+                                const textRaw = aiData.candidates[0].content.parts[0].text;
+                                const textClean = textRaw.replace(/```json/g, '').replace(/```/g, '').trim();
+                                parsedData = JSON.parse(textClean);
+                                usedModelName = `${model} (${apiVer})`;
+                                success = true;
+                                break;
+                            } else {
+                                lastErrorMessage = aiData.error?.message || `HTTP ${response.status}`;
+                            }
+                        } catch (err) {
+                            lastErrorMessage = err.message;
+                        }
+                    }
+
+                    if (success) break;
+                }
+
+                if (!parsedData) {
+                    throw new Error(`Gagal terhubung ke AI. Rincian: ${lastErrorMessage}`);
+                }
 
                 localStorage.setItem(cacheKey, JSON.stringify(parsedData));
 
                 processAiResult(parsedData);
-                setCustomAlert({ show: true, message: 'Resep fisik berhasil dipindai oleh AI dan disimpan ke cache!', type: 'success' });
-            } catch (error) {
-                const mockParsedData = {
-                    patient_name: "Aldy",
-                    doctor_name: "dr. Aris Aji Kurniawan",
-                    prescription_date: new Date().toISOString().split('T')[0],
-                    items: [
-                        { name: "Co Amoxiclav syr", quantity: 1, signa: "3 dd 1 cth pc" },
-                        { name: "Panadol syr", quantity: 1, signa: "prn dd 1 C pc" },
-                        { name: "Paracetamol Tablet", quantity: 10, signa: "3 x 1" }
-                    ]
-                };
-
-                processAiResult(mockParsedData);
                 setCustomAlert({ 
                     show: true, 
-                    message: 'Mode Simulasi Aktif (Kuota AI 429 Habis): Data resep dimuat otomatis. Kotak peringatan substitusi dan tombol sematkan catatan sekarang sudah aktif!', 
+                    message: `Berhasil memindai resep menggunakan ${usedModelName}!`, 
                     type: 'success' 
+                });
+
+            } catch (error) {
+                setCustomAlert({ 
+                    show: true, 
+                    message: `Gagal memindai resep: ${error.message}. Silakan isi detail resep secara manual.`, 
+                    type: 'error' 
                 });
             } finally {
                 setIsScanning(false);
@@ -230,6 +281,8 @@ export default function Create({ medicines }) {
                         handleImageUpload={handleImageUpload} 
                         handleDoctorChange={handleDoctorChange} 
                         isScanning={isScanning} 
+                        previewUrl={previewUrl}    
+                        handleScanAI={handleScanAI}
                     />
 
                     <PrescriptionItemManager 
@@ -251,7 +304,6 @@ export default function Create({ medicines }) {
                         handleRemoveItem={handleRemoveItem}
                     />
 
-                    {/* Kotak Catatan / Keterangan Resep */}
                     <div className="bg-white dark:bg-[#1E272E] p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-4">
                         <h3 className="text-sm font-bold text-[#48CFA4] border-b border-gray-100 dark:border-gray-800 pb-2">Catatan Tambahan</h3>
                         <div>
@@ -261,14 +313,19 @@ export default function Create({ medicines }) {
                                 rows="3" 
                                 value={data.notes} 
                                 onChange={e => setData('notes', e.target.value)}
-                                placeholder="Klik tombol 'Sematkan ke Catatan Resep Ini' di atas untuk mengisi otomatis catatan substitusi..."
+                                placeholder="Tulis instruksi tambahan resep di sini..."
                             ></textarea>
                         </div>
                     </div>
 
                     <div className="flex justify-end">
-                        <button type="submit" title="Simpan Resep Masuk" disabled={processing} className="p-3 bg-[#48CFA4] hover:bg-[#3AB890] text-white rounded-xl shadow-lg disabled:opacity-50 cursor-pointer">
-                            {processing ? <svg className="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg> : <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>}
+                        <button type="submit" disabled={processing} className="px-6 py-2.5 bg-[#48CFA4] hover:bg-[#3AB890] text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all duration-200 shadow-sm disabled:opacity-50 cursor-pointer">
+                            {processing ? (
+                                <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                            ) : (
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                            )}
+                            Simpan Resep Masuk
                         </button>
                     </div>
                 </form>

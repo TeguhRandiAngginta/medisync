@@ -7,6 +7,7 @@ use App\Models\Purchase;
 use App\Models\Supplier;
 use App\Models\Medicine;
 use App\Models\AuditLog;
+use App\Models\ProductBatch;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
@@ -85,7 +86,7 @@ class PurchaseController extends Controller
             ]);
 
             foreach ($request->items as $item) {
-                $purchase->details()->create([
+                $detail = $purchase->details()->create([
                     'medicine_id' => $item['medicine_id'],
                     'batch_number' => strtoupper($item['batch_number']),
                     'expired_date' => $item['expired_date'],
@@ -94,7 +95,15 @@ class PurchaseController extends Controller
                     'subtotal' => $item['quantity'] * $item['purchase_price'],
                 ]);
 
-                // Otomatis tambah stok obat di master produk
+                \App\Models\ProductBatch::create([
+                    'product_id' => $item['medicine_id'],
+                    'purchase_detail_id' => $detail->id,
+                    'batch_number' => strtoupper($item['batch_number']),
+                    'stock_quantity' => $item['quantity'],
+                    'expired_date' => $item['expired_date'],
+                    'purchase_price' => $item['purchase_price'],
+                ]);
+
                 $medicine = Medicine::find($item['medicine_id']);
                 if ($medicine) {
                     $medicine->increment('stock', $item['quantity']);
@@ -232,6 +241,51 @@ class PurchaseController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['message' => 'Gagal menghapus permanen data: ' . $e->getMessage()]);
+        }
+    }
+
+    public function batchesIndex()
+    {
+        $batches = \App\Models\ProductBatch::with(['product', 'purchaseDetail.purchase.supplier'])
+            ->where('stock_quantity', '>', 0)
+            ->orderBy('expired_date', 'asc')
+            ->get();
+
+        return Inertia::render('Purchases/Batches', [
+            'batches' => $batches
+        ]);
+    }
+
+    public function bulkDestroy(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:purchases,id',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $purchases = Purchase::whereIn('id', $request->ids)->with('details')->get();
+
+            foreach ($purchases as $purchase) {
+                foreach ($purchase->details as $detail) {
+                    $medicine = Medicine::find($detail->medicine_id);
+                    if ($medicine) {
+                        $newStock = max(0, $medicine->stock - $detail->quantity);
+                        $medicine->update(['stock' => $newStock]);
+                    }
+                }
+                $purchase->details()->delete();
+                $purchase->delete();
+            }
+
+            AuditLog::record('pembelian', 'DELETE', "Menghapus massal " . count($request->ids) . " faktur pembelian.");
+
+            DB::commit();
+            return back()->with('success', count($request->ids) . ' faktur pembelian berhasil dihapus.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal menghapus data massal: ' . $e->getMessage()]);
         }
     }
 }

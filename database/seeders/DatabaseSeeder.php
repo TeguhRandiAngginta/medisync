@@ -10,9 +10,6 @@ use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
         $branch = Branch::firstOrCreate(
@@ -44,13 +41,12 @@ class DatabaseSeeder extends Seeder
                 'password' => Hash::make('password'),
                 'branch_id' => $branch->id,
                 'role_id' => $superadminRole->id,
-                'phone' => '081111222233',
                 'is_active' => true,
             ]
         );
 
         $this->call([
-        MasterDataSeeder::class,
-    ]);
+            MasterDataSeeder::class,
+        ]);
     }
 }

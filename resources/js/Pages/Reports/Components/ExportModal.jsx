@@ -35,7 +35,7 @@ export default function ExportModal({
 
                 <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-[#151E24]/50">
                     <h3 className="font-extrabold text-lg text-gray-900 dark:text-white">Pengaturan Ekspor</h3>
-                    <button onClick={onClose} className="w-8 h-8 rounded-full bg-white dark:bg-[#2A343D] border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-500 hover:text-red-500 transition-colors cursor-pointer">
+                    <button onClick={onClose} className="w-8 h-8 rounded-md bg-white dark:bg-[#2A343D] border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-500 hover:text-red-500 transition-colors cursor-pointer">
                         ✕
                     </button>
                 </div>
@@ -46,7 +46,7 @@ export default function ExportModal({
                         <select 
                             value={selectedReportType} 
                             onChange={(e) => setSelectedReportType(e.target.value)}
-                            className="w-full px-4 py-3 text-sm font-bold rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#151E24] text-gray-800 dark:text-gray-200 focus:ring-[#48CFA4] focus:border-[#48CFA4] cursor-pointer"
+                            className="w-full px-4 py-3 text-sm font-bold rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#151E24] text-gray-800 dark:text-gray-200 focus:ring-[#48CFA4] focus:border-[#48CFA4] cursor-pointer"
                         >
                             <option value="sales">Laporan Penjualan (Omzet & Struk)</option>
                             <option value="purchase">Laporan Pembelian & Supplier</option>
@@ -73,7 +73,7 @@ export default function ExportModal({
                                         <button 
                                             key={preset.id}
                                             onClick={() => handlePresetClick(preset.id)}
-                                            className={`py-2 px-1 text-[10px] sm:text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                                            className={`py-2 px-1 text-[10px] sm:text-xs font-bold rounded-md border transition-all cursor-pointer ${
                                                 isActive 
                                                 ? 'border-[#48CFA4]/50 bg-[#EAF5F0] dark:bg-[#1C332B] text-[#246A55] dark:text-[#48CFA4] shadow-sm' 
                                                 : 'border-transparent bg-gray-100 dark:bg-[#2A343D] text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-[#32404A]'
@@ -92,7 +92,7 @@ export default function ExportModal({
                                             type="date" 
                                             value={startDate} 
                                             onChange={e => setStartDate(e.target.value)} 
-                                            className="w-full px-3 py-2.5 text-xs font-bold rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#151E24] text-gray-700 dark:text-gray-200 focus:ring-[#48CFA4] focus:border-[#48CFA4] dark:[color-scheme:dark] cursor-pointer" 
+                                            className="w-full px-3 py-2.5 text-xs font-bold rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#151E24] text-gray-700 dark:text-gray-200 focus:ring-[#48CFA4] focus:border-[#48CFA4] dark:[color-scheme:dark] cursor-pointer" 
                                         />
                                     </div>
                                     <span className="text-gray-400 text-xs font-bold">s/d</span>
@@ -101,7 +101,7 @@ export default function ExportModal({
                                             type="date" 
                                             value={endDate} 
                                             onChange={e => setEndDate(e.target.value)} 
-                                            className="w-full px-3 py-2.5 text-xs font-bold rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#151E24] text-gray-700 dark:text-gray-200 focus:ring-[#48CFA4] focus:border-[#48CFA4] dark:[color-scheme:dark] cursor-pointer" 
+                                            className="w-full px-3 py-2.5 text-xs font-bold rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#151E24] text-gray-700 dark:text-gray-200 focus:ring-[#48CFA4] focus:border-[#48CFA4] dark:[color-scheme:dark] cursor-pointer" 
                                         />
                                     </div>
                                 </div>
@@ -119,7 +119,7 @@ export default function ExportModal({
                                 <button
                                     key={fmt.id}
                                     onClick={() => setExportFormat(fmt.id)}
-                                    className={`p-4 rounded-xl border text-center font-bold text-sm transition-all flex flex-col items-center gap-2 cursor-pointer ${
+                                    className={`p-4 rounded-md border text-center font-bold text-sm transition-all flex flex-col items-center gap-2 cursor-pointer ${
                                         exportFormat === fmt.id 
                                         ? 'border-[#48CFA4] bg-[#EAF5F0]/50 dark:bg-[#1C332B]/60 text-[#246A55] dark:text-[#48CFA4] shadow-sm' 
                                         : 'border-gray-200 dark:border-gray-700/80 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-[#2A343D] hover:bg-gray-100 dark:hover:bg-[#32404A]'
@@ -134,10 +134,17 @@ export default function ExportModal({
                 </div>
 
                 <div className="p-6 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-[#151E24]/50 flex justify-end gap-3">
-                    <button onClick={onClose} className="px-5 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-[#2A343D] rounded-xl transition-colors cursor-pointer">
+                    <button 
+                        onClick={onClose} 
+                        className="px-6 py-2.5 rounded-md text-sm font-bold flex items-center justify-center gap-2 transition-all duration-200 bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 shadow-sm dark:bg-transparent dark:text-gray-300 dark:hover:bg-[#2A343D] dark:border dark:border-[#30413B] cursor-pointer"
+                    >
                         Batal
                     </button>
-                    <button onClick={handleExecuteExport} className="px-6 py-2.5 bg-[#48CFA4] hover:bg-[#3bb790] text-white text-xs font-bold rounded-xl shadow-sm transition-colors cursor-pointer">
+                    <button 
+                        onClick={handleExecuteExport} 
+                        className="px-6 py-2.5 rounded-md text-sm font-bold flex items-center justify-center gap-2 transition-all duration-200 bg-[#48CFA4] text-white hover:bg-[#3bb890] shadow-sm dark:bg-[#253939] dark:text-[#67E2B4] dark:hover:bg-[#2d4747] dark:border dark:border-[#30413B] dark:shadow-none cursor-pointer"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                         Unduh / Ekspor
                     </button>
                 </div>

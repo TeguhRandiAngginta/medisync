@@ -2,12 +2,12 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Sale extends Model
 {
-    use SoftDeletes;
+    use HasFactory;
 
     protected $guarded = ['id'];
 
@@ -19,5 +19,16 @@ class Sale extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    protected static function booted()
+    {
+        static::deleting(function ($sale) {
+            foreach ($sale->details as $detail) {
+                if ($detail->medicine) {
+                    $detail->medicine->increment('stock', $detail->quantity);
+                }
+            }
+        });
     }
 }
