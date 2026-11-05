@@ -7,10 +7,11 @@ export default function Index({ purchases }) {
     const { flash } = usePage().props;
     const [confirmingDeletion, setConfirmingDeletion] = useState(false);
     const [selectedPurchase, setSelectedPurchase] = useState(null);
+    const [printModalOpen, setPrintModalOpen] = useState(false);
+    const [activePurchaseToPrint, setActivePurchaseToPrint] = useState(null);
 
     useEffect(() => {
         if (flash?.print_url) {
-            window.open(flash.print_url, '_blank');
         }
     }, [flash]);
 
@@ -18,13 +19,11 @@ export default function Index({ purchases }) {
         return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number);
     };
 
-    // Buka modal konfirmasi hapus kustom
     const confirmDelete = (purchase) => {
         setSelectedPurchase(purchase);
         setConfirmingDeletion(true);
     };
 
-    // Eksekusi hapus setelah dikonfirmasi via modal
     const deletePurchase = () => {
         if (selectedPurchase) {
             router.delete(route('purchases.destroy', selectedPurchase.id), {
@@ -43,6 +42,11 @@ export default function Index({ purchases }) {
             case 'cancelled': return <span className="px-3 py-1 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-lg text-xs font-bold uppercase tracking-wider">Batal</span>;
             default: return status;
         }
+    };
+
+    const handleOpenPrintModal = (purchase) => {
+        setActivePurchaseToPrint(purchase);
+        setPrintModalOpen(true);
     };
 
     return (
@@ -105,18 +109,17 @@ export default function Index({ purchases }) {
                                     </td>
                                     <td className="px-6 py-5 text-center">
                                         <div className="flex items-center justify-center gap-2">
-                                            <a 
-                                                href={route('purchases.print', purchase.id)} 
-                                                target="_blank" 
+                                            <button 
+                                                onClick={() => handleOpenPrintModal(purchase)} 
                                                 title="Cetak BPB"
-                                                className="p-2 bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 rounded-xl hover:bg-blue-500 hover:text-white transition-colors"
+                                                className="p-2 bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 rounded-xl hover:bg-blue-500 hover:text-white transition-colors cursor-pointer"
                                             >
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
-                                            </a>
+                                            </button>
                                             <button 
                                                 onClick={() => confirmDelete(purchase)}
                                                 title="Hapus Faktur"
-                                                className="p-2 bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-colors"
+                                                className="p-2 bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-colors cursor-pointer"
                                             >
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                             </button>
@@ -133,8 +136,6 @@ export default function Index({ purchases }) {
             {confirmingDeletion && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-[#1E272E] p-8 rounded-3xl shadow-2xl max-w-md w-full mx-4 border border-gray-100 dark:border-gray-800 text-center">
-                        
-                        {/* Perbaikan ukuran dan pembungkus ikon */}
                         <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 flex-shrink-0">
                             <svg className="w-8 h-8 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -148,16 +149,81 @@ export default function Index({ purchases }) {
                         <div className="flex justify-center gap-3">
                             <button 
                                 onClick={() => setConfirmingDeletion(false)}
-                                className="px-6 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-2xl text-sm font-bold hover:bg-gray-200 transition-colors"
+                                className="px-6 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-2xl text-sm font-bold hover:bg-gray-200 transition-colors cursor-pointer"
                             >
                                 Batal
                             </button>
                             <button 
                                 onClick={deletePurchase}
-                                className="px-6 py-2.5 bg-red-600 text-white rounded-2xl text-sm font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-600/30"
+                                className="px-6 py-2.5 bg-red-600 text-white rounded-2xl text-sm font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-600/30 cursor-pointer"
                             >
                                 Ya, Hapus
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL PRATINJAU & CETAK DOKUMEN */}
+            {printModalOpen && activePurchaseToPrint && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 p-4 overflow-y-auto">
+                    <div className="bg-white dark:bg-[#1E272E] p-6 md:p-7 rounded-3xl shadow-2xl max-w-4xl w-full border border-gray-100 dark:border-gray-800 flex flex-col my-auto">
+                        
+                        {/* Header Modal */}
+                        <div className="flex justify-between items-center pb-4 mb-3 border-b border-gray-100 dark:border-gray-800">
+                            <div>
+                                <span className="px-3 py-1 bg-[#EAF5F0] dark:bg-[#253939] text-[#246A55] dark:text-[#67E2B4] rounded-full text-[10px] font-extrabold uppercase tracking-wider">
+                                    Pratinjau Dokumen BPB
+                                </span>
+                                <h3 className="text-lg font-black text-gray-800 dark:text-gray-100 mt-1 font-mono">
+                                    {activePurchaseToPrint.invoice_number}
+                                </h3>
+                            </div>
+                            <button 
+                                onClick={() => setPrintModalOpen(false)}
+                                className="p-2.5 bg-gray-100 dark:bg-gray-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-xl transition-colors cursor-pointer"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
+                        </div>
+
+                        {/* Konten Viewer PDF */}
+                        <div className="w-full h-[62vh] bg-gray-100 dark:bg-[#151E24] rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-inner">
+                            <iframe 
+                                id="pdf-print-iframe"
+                                src={route('purchases.print', activePurchaseToPrint.id)} 
+                                className="w-full h-full border-0"
+                                title="Pratinjau PDF BPB"
+                            />
+                        </div>
+
+                        {/* Footer Modal */}
+                        <div className="flex justify-between items-center pt-4 mt-3 border-t border-gray-100 dark:border-gray-800">
+                            <p className="text-xs text-gray-400 font-mono">
+                                No. Sistem: <span className="font-bold">{activePurchaseToPrint.internal_receipt_number}</span>
+                            </p>
+                            <div className="flex gap-3">
+                                <button 
+                                    onClick={() => setPrintModalOpen(false)}
+                                    className="px-5 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-2xl text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+                                >
+                                    Tutup
+                                </button>
+
+                                {/* Tombol Cetak Dokumen */}
+                                <button 
+                                    onClick={() => {
+                                        const iframe = document.getElementById('pdf-print-iframe');
+                                        if (iframe && iframe.contentWindow) {
+                                            iframe.contentWindow.print();
+                                        }
+                                    }}
+                                    className="px-6 py-2.5 bg-[#48CFA4] text-white rounded-2xl text-xs font-bold hover:opacity-90 transition-opacity shadow-lg shadow-[#48CFA4]/20 flex items-center gap-2 cursor-pointer"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                                    Cetak Dokumen
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

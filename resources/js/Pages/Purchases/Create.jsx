@@ -8,8 +8,9 @@ export default function Create({ suppliers, medicines }) {
     const generateReceiptNo = () => {
         const date = new Date();
         const ymd = date.getFullYear().toString() + (date.getMonth() + 1).toString().padStart(2, '0') + date.getDate().toString().padStart(2, '0');
-        const rnd = Math.floor(1000 + Math.random() * 9000);
-        return `RCV-${ymd}-${rnd}`;
+        const timeSlug = date.getHours().toString().padStart(2, '0') + date.getMinutes().toString().padStart(2, '0') + date.getSeconds().toString().padStart(2, '0');
+        const rnd = Math.floor(100 + Math.random() * 900);
+        return `RCV-${ymd}-${timeSlug}-${rnd}`;
     };
 
     const { data, setData, post, processing, errors } = useForm({
@@ -74,6 +75,13 @@ export default function Create({ suppliers, medicines }) {
             <div className="max-w-7xl mx-auto pb-12">
                 <form onSubmit={submit} className="space-y-6">
                     
+                    {/* NOTIFIKASI ERROR UMUM DARI BACKEND */}
+                    {errors.message && (
+                        <div className="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-2xl text-red-600 dark:text-red-400 text-xs font-bold shadow-sm">
+                            ⚠️ {errors.message}
+                        </div>
+                    )}
+
                     {/* KARTU HEADER DOKUMEN */}
                     <div className="bg-white dark:bg-[#1E272E] p-8 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 transition-colors">
                         <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100 dark:border-gray-800">
@@ -92,6 +100,7 @@ export default function Create({ suppliers, medicines }) {
                             <div>
                                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">No. Sistem (Internal)</label>
                                 <input type="text" value={data.internal_receipt_number} disabled className="w-full px-4 py-3 bg-gray-50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-2xl text-gray-500 dark:text-gray-400 font-mono font-bold cursor-not-allowed" />
+                                <InputError message={errors.internal_receipt_number} className="mt-2" />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-2">No. Faktur PBF Asli <span className="text-red-500">*</span></label>
@@ -121,9 +130,9 @@ export default function Create({ suppliers, medicines }) {
                                 <h4 className="text-base font-extrabold text-gray-800 dark:text-gray-100 flex items-center gap-2">
                                     <span className="w-2.5 h-6 bg-[#F6A84B] rounded-full"></span> Rincian Item Obat Masuk
                                 </h4>
-                                <p className="text-xs text-gray-400 mt-1">Masukkan nomor batch dan tanggal kadaluarsa sesuai fisik kemasan pabrik.</p>
+                                <p className="text-xs text-gray-400 mt-1">Masukkan nomor batch dan tanggal kadaluarsa (minimal 6 bulan ke depan dari hari ini).</p>
                             </div>
-                            <button type="button" onClick={addItem} className="px-5 py-2.5 bg-[#EAF5F0] text-[#246A55] dark:bg-[#253939] dark:text-[#67E2B4] rounded-2xl text-xs font-extrabold hover:bg-[#48CFA4] hover:text-white transition-all shadow-sm flex items-center gap-2">
+                            <button type="button" onClick={addItem} className="px-5 py-2.5 bg-[#EAF5F0] text-[#246A55] dark:bg-[#253939] dark:text-[#67E2B4] rounded-2xl text-xs font-extrabold hover:bg-[#48CFA4] hover:text-white transition-all shadow-sm flex items-center gap-2 cursor-pointer">
                                 + Tambah Baris Obat
                             </button>
                         </div>
@@ -134,7 +143,7 @@ export default function Create({ suppliers, medicines }) {
                                     <tr>
                                         <th className="px-4 py-3.5 rounded-l-xl w-[26%]">Pilih Obat Master</th>
                                         <th className="px-4 py-3.5 w-[16%]">No. Batch Pabrik</th>
-                                        <th className="px-4 py-3.5 w-[16%]">Expired Date</th>
+                                        <th className="px-4 py-3.5 w-[16%]">Expired Date (Min. 6 Bln)</th>
                                         <th className="px-4 py-3.5 w-[18%] text-center">Jumlah & Satuan</th>
                                         <th className="px-4 py-3.5 w-[14%]">Harga Beli</th>
                                         <th className="px-4 py-3.5 w-[10%] text-right">Subtotal</th>
@@ -143,18 +152,21 @@ export default function Create({ suppliers, medicines }) {
                                 </thead>
                                 <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
                                     {data.items.map((item, index) => (
-                                        <tr key={index} className="hover:bg-gray-50/30 dark:hover:bg-gray-800/10 transition-colors">
+                                        <tr key={index} className="hover:bg-gray-50/30 dark:hover:bg-gray-800/10 transition-colors align-top">
                                             <td className="px-2 py-3">
                                                 <select value={item.medicine_id} onChange={e => handleItemChange(index, 'medicine_id', e.target.value)} required className="w-full text-xs px-3 py-2.5 bg-gray-50/50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-xl focus:border-[#48CFA4] text-gray-900 dark:text-gray-100 font-medium">
                                                     <option value="">-- Cari Obat --</option>
                                                     {medicines.map(med => <option key={med.id} value={med.id}>{med.sku} — {med.name}</option>)}
                                                 </select>
+                                                <InputError message={errors[`items.${index}.medicine_id`]} className="mt-1" />
                                             </td>
                                             <td className="px-2 py-3">
                                                 <input type="text" value={item.batch_number} onChange={e => handleItemChange(index, 'batch_number', e.target.value)} required placeholder="Cth: BATCH001" className="w-full text-xs px-3 py-2.5 bg-gray-50/50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-xl focus:border-[#48CFA4] text-gray-900 dark:text-gray-100 uppercase font-mono" />
+                                                <InputError message={errors[`items.${index}.batch_number`]} className="mt-1" />
                                             </td>
                                             <td className="px-2 py-3">
                                                 <input type="date" value={item.expired_date} onChange={e => handleItemChange(index, 'expired_date', e.target.value)} required className="w-full text-xs px-3 py-2.5 bg-gray-50/50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-xl focus:border-[#48CFA4] text-gray-900 dark:text-gray-100 font-medium" />
+                                                <InputError message={errors[`items.${index}.expired_date`]} className="mt-1" />
                                             </td>
                                             <td className="px-2 py-3">
                                                 <div className="flex gap-2">
@@ -168,18 +180,20 @@ export default function Create({ suppliers, medicines }) {
                                                         <option value="Pcs">Pcs</option>
                                                     </select>
                                                 </div>
+                                                <InputError message={errors[`items.${index}.quantity`]} className="mt-1" />
                                             </td>
                                             <td className="px-2 py-3">
                                                 <div className="relative">
                                                     <span className="absolute left-3 top-2.5 text-gray-400 text-xs">Rp</span>
                                                     <input type="number" min="0" value={item.purchase_price} onChange={e => handleItemChange(index, 'purchase_price', e.target.value)} required className="w-full text-xs pl-8 pr-3 py-2.5 bg-gray-50/50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-xl focus:border-[#48CFA4] text-gray-900 dark:text-gray-100 font-mono font-bold" />
                                                 </div>
+                                                <InputError message={errors[`items.${index}.purchase_price`]} className="mt-1" />
                                             </td>
                                             <td className="px-2 py-3 text-right font-mono font-bold text-[#48CFA4]">
                                                 {formatRupiah(item.subtotal)}
                                             </td>
                                             <td className="px-2 py-3 text-center">
-                                                <button type="button" onClick={() => removeItem(index)} disabled={data.items.length === 1} className="p-2 text-red-400 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-20 transition-colors">
+                                                <button type="button" onClick={() => removeItem(index)} disabled={data.items.length === 1} className="p-2 text-red-400 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-20 transition-colors cursor-pointer">
                                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                                 </button>
                                             </td>
@@ -194,6 +208,7 @@ export default function Create({ suppliers, medicines }) {
                             <div className="w-full md:w-1/2 mb-6 md:mb-0">
                                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">Catatan Keterangan Faktur</label>
                                 <textarea value={data.notes} onChange={e => setData('notes', e.target.value)} rows="3" className="w-full px-4 py-3 bg-gray-50/50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-2xl focus:border-[#48CFA4] text-gray-900 dark:text-gray-100 text-sm" placeholder="Tuliskan catatan khusus atau diskon dari distributor jika ada..."></textarea>
+                                <InputError message={errors.notes} className="mt-2" />
                             </div>
                             
                             <div className="text-right w-full md:w-auto bg-gray-50 dark:bg-[#151E24] p-6 rounded-2xl border border-gray-100 dark:border-gray-800">
@@ -204,13 +219,12 @@ export default function Create({ suppliers, medicines }) {
                                 
                                 <div className="flex justify-end gap-3">
                                     <Link href={route('purchases.index')} className="px-6 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-2xl text-sm font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Batal</Link>
-                                    <PrimaryButton type="submit" disabled={processing || data.items.length === 0} className="px-8 py-3 text-sm shadow-lg shadow-[#48CFA4]/20 rounded-2xl">
+                                    <PrimaryButton type="submit" disabled={processing || data.items.length === 0} className="px-8 py-3 text-sm shadow-lg shadow-[#48CFA4]/20 rounded-2xl cursor-pointer">
                                         {processing ? 'Menyimpan...' : 'Simpan & Cetak BPB'}
                                     </PrimaryButton>
                                 </div>
                             </div>
                         </div>
-                        
                     </div>
                 </form>
             </div>

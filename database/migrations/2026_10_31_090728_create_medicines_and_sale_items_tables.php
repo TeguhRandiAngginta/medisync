@@ -45,6 +45,5 @@ return new class extends Migration
     public function down()
     {
         Schema::dropIfExists('sale_items');
-        // Kita tidak drop medicines karena mungkin dipakai tabel lain
     }
 };
