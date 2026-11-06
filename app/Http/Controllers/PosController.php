@@ -3,34 +3,35 @@
 namespace App\Http\Controllers;
 
 use App\Models\Medicine;
-use App\Models\ProductBatch;
 use App\Models\Sale;
 use App\Models\SaleDetail;
-use App\Models\AuditLog;
+use App\Models\Prescription;
+use App\Services\InventoryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class PosController extends Controller
 {
     public function index()
     {
+        $today = now()->toDateString();
+
         $medicines = Medicine::where('is_active', true)
-            ->with(['batches' => function($query) {
-                $query->where('stock_quantity', '>', 0);
-            }])
-            ->select('id', 'sku', 'barcode', 'name', 'base_unit', 'selling_price', 'stock')
+            ->whereHas('batches', function ($query) use ($today) {
+                $query->where('stock_quantity', '>', 0)
+                    ->where('expired_date', '>=', $today);
+            })
+            ->withSum(['batches as real_stock' => function ($query) use ($today) {
+                $query->where('stock_quantity', '>', 0)
+                    ->where('expired_date', '>=', $today);
+            }], 'stock_quantity')
             ->get()
             ->map(function ($medicine) {
-                $realBatchStock = $medicine->batches->sum('stock_quantity');
-                
-                $medicine->stock = (int) $realBatchStock;
-                $medicine->selling_price = (float) $medicine->selling_price;
-
-                unset($medicine->batches);
+                $medicine->stock = (int) ($medicine->real_stock ?? 0);
                 return $medicine;
             })
+            ->filter(fn($m) => $m->stock > 0)
             ->values();
 
         return Inertia::render('Pos/Index', [
@@ -42,110 +43,75 @@ class PosController extends Controller
     {
         $request->validate([
             'cart' => 'required|array|min:1',
-            'cart.*.medicine_id' => 'required|exists:medicines,id',
             'cart.*.quantity' => 'required|integer|min:1',
-            'cart.*.price' => 'required|numeric|min:0',
+            'cart.*.price' => 'required|numeric',
+            'paid_amount' => 'required|numeric',
+            'change_amount' => 'required|numeric',
             'payment_method' => 'required|string',
+            'prescription_id' => 'nullable|exists:prescriptions,id',
         ]);
-
-        $subtotal = collect($request->cart)->sum(function($item) {
-            return $item['price'] * $item['quantity'];
-        });
 
         DB::beginTransaction();
         try {
-            foreach ($request->cart as $item) {
-                $medicine = Medicine::where('id', $item['medicine_id'])->lockForUpdate()->first();
-                
-                if (!$medicine) {
-                    throw new \Exception("Obat dengan ID {$item['medicine_id']} tidak ditemukan.");
+            if ($request->filled('prescription_id')) {
+                $prescription = Prescription::where('id', $request->prescription_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$prescription) {
+                    throw new \Exception('Resep tidak ditemukan.');
                 }
 
-                $totalBatchStock = ProductBatch::where('product_id', $item['medicine_id'])
-                    ->where('stock_quantity', '>', 0)
-                    ->sum('stock_quantity');
-
-                if ($totalBatchStock < $item['quantity']) {
-                    throw new \Exception("Stok aktif untuk '{$medicine->name}' tidak mencukupi! Sisa stok tersedia: {$totalBatchStock} {$medicine->base_unit}. Silakan sesuaikan jumlah pembelian.");
+                if ($prescription->status !== 'DRAFT') {
+                    throw new \Exception('Resep ini sudah pernah ditebus.');
                 }
+
+                $prescription->update(['status' => 'DISPENSED']);
             }
 
-            $invoiceNumber = 'INV-' . date('Ymd') . '-' . strtoupper(Str::random(5));
-            
+            $invoiceNumber = 'TRX-' . date('YmdHis') . '-' . rand(100, 999);
+            $totalAmount = collect($request->cart)->sum(fn($i) => $i['quantity'] * $i['price']);
+
             $sale = Sale::create([
                 'invoice_number' => $invoiceNumber,
                 'user_id' => auth()->id(),
-                'sale_date' => now(),
-                'subtotal_amount' => $subtotal,
-                'discount_amount' => 0,
-                'total_amount' => $subtotal,
-                'paid_amount' => $request->paid_amount ?? $subtotal,
-                'change_amount' => $request->change_amount ?? 0,
+                'total_amount' => $totalAmount,
+                'subtotal_amount'  => $totalAmount,
+                'paid_amount'    => $request->paid_amount,
+                'change_amount' => $request->change_amount,
                 'payment_method' => $request->payment_method,
+                'sale_date' => now(),
             ]);
 
             foreach ($request->cart as $item) {
-                $quantityNeeded = $item['quantity'];
+                $medicineId = $item['medicine_id'] ?? $item['id'];
+                $unitHpp = InventoryService::deductStockFEFO($medicineId, $item['quantity']);
 
-                $batches = ProductBatch::where('product_id', $item['medicine_id'])
+                $activeBatch = \App\Models\ProductBatch::where('medicine_id', $medicineId)
                     ->where('stock_quantity', '>', 0)
                     ->orderBy('expired_date', 'asc')
-                    ->lockForUpdate()
-                    ->get();
+                    ->first();
 
-                foreach ($batches as $batch) {
-                    if ($quantityNeeded <= 0) break;
-
-                    if ($batch->stock_quantity >= $quantityNeeded) {
-                        $deductQty = $quantityNeeded;
-                        $batch->decrement('stock_quantity', $deductQty);
-                        $quantityNeeded = 0;
-                    } else {
-                        $deductQty = $batch->stock_quantity;
-                        $batch->update(['stock_quantity' => 0]);
-                        $quantityNeeded -= $deductQty;
-                    }
-
-                    SaleDetail::create([
-                        'sale_id' => $sale->id,
-                        'medicine_id' => $item['medicine_id'],
-                        'batch_number' => $batch->batch_number,
-                        'quantity' => $deductQty,
-                        'selling_price' => $item['price'],
-                        'subtotal' => $item['price'] * $deductQty,
-                    ]);
-                }
-
-                $medicine = Medicine::find($item['medicine_id']);
-                if ($medicine) {
-                    $remainingStock = ProductBatch::where('product_id', $medicine->id)->sum('stock_quantity');
-                    $medicine->update(['stock' => $remainingStock]);
-                }
-            }
-
-            if (class_exists(AuditLog::class)) {
-                AuditLog::record('pos', 'CREATE', "Transaksi kasir berhasil dengan FEFO: {$invoiceNumber} via {$request->payment_method} senilai Rp" . number_format($subtotal, 0, ',', '.'));
+                SaleDetail::create([
+                    'sale_id'        => $sale->id,
+                    'medicine_id'    => $medicineId,
+                    'batch_number'   => $activeBatch ? $activeBatch->batch_number : 'BATCH-AUTO',
+                    'quantity'       => $item['quantity'],
+                    'purchase_price' => $unitHpp,
+                    'selling_price'  => $item['price'],
+                    'subtotal'       => $item['quantity'] * $item['price'],
+                ]);
             }
 
             DB::commit();
 
-            return back()->with([
-                'success' => "Transaksi berhasil! Nomor Struk: {$invoiceNumber}",
+            return redirect()->back()->with([
+                'success' => 'Transaksi kasir berhasil diproses!',
                 'invoice_number' => $invoiceNumber
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->withErrors(['message' => $e->getMessage()]);
+            return back()->withErrors(['message' => 'Gagal memproses transaksi: ' . $e->getMessage()]);
         }
-    }
-
-    public function printReceipt($invoice)
-    {
-        $sale = Sale::with(['details.medicine', 'user'])->where('invoice_number', $invoice)->firstOrFail();
-
-        return view('pos.receipt-pdf', [
-            'sale' => $sale
-        ]);
     }
 }

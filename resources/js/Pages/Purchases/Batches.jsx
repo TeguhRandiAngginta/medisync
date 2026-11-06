@@ -55,15 +55,16 @@ export default function Batches({ batches }) {
                             batches.map((batch) => (
                                 <tr key={batch.id} className="hover:bg-gray-50 dark:hover:bg-[#151E24] transition-colors">
                                     <td className="px-6 py-5">
-                                        <div className="font-bold text-gray-800 dark:text-gray-100">{batch.product?.name || 'Obat Dihapus'}</div>
-                                        <div className="text-xs text-gray-400 font-mono">{batch.product?.sku}</div>
+                                        {/* Diubah dari batch.product menjadi batch.medicine */}
+                                        <div className="font-bold text-gray-800 dark:text-gray-100">{batch.medicine?.name || 'Nama Obat Tidak Tersedia'}</div>
+                                        <div className="text-xs text-gray-400 font-mono">{batch.medicine?.sku}</div>
                                     </td>
                                     <td className="px-6 py-5 font-mono font-bold text-[#48CFA4]">{batch.batch_number}</td>
                                     <td className="px-6 py-5 text-gray-600 dark:text-gray-300 font-medium">
                                         {batch.purchase_detail?.purchase?.supplier?.name || 'Pembelian Langsung'}
                                     </td>
                                     <td className="px-6 py-5 font-mono font-bold text-gray-800 dark:text-gray-200">
-                                        {batch.stock_quantity} <span className="text-xs font-normal text-gray-400">{batch.product?.base_unit}</span>
+                                        {batch.stock_quantity} <span className="text-xs font-normal text-gray-400">{batch.medicine?.base_unit}</span>
                                     </td>
                                     <td className="px-6 py-5 font-mono text-gray-700 dark:text-gray-300 font-bold">{batch.expired_date}</td>
                                     <td className="px-6 py-5 text-center">

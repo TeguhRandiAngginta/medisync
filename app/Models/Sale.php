@@ -4,10 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Services\InventoryService;
 
 class Sale extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $guarded = ['id'];
 
@@ -24,9 +26,11 @@ class Sale extends Model
     protected static function booted()
     {
         static::deleting(function ($sale) {
-            foreach ($sale->details as $detail) {
-                if ($detail->medicine) {
-                    $detail->medicine->increment('stock', $detail->quantity);
+            if (!$sale->isForceDeleting()) {
+                foreach ($sale->details as $detail) {
+                    if ($detail->medicine_id && $detail->quantity > 0) {
+                        InventoryService::restoreStockFEFO($detail->medicine_id, $detail->quantity);
+                    }
                 }
             }
         });

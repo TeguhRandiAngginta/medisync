@@ -2,11 +2,8 @@
 
 namespace App\Providers;
 
-use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
-// Tambahkan 2 baris ini untuk modifikasi email
-use Illuminate\Auth\Notifications\ResetPassword;
-use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Support\Facades\Gate;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -23,21 +20,16 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        Vite::prefetch(concurrency: 3);
+        Gate::before(function ($user, $ability) {
+            $userRole = strtolower($user->role ?? '');
 
-        // Menimpa tampilan email Reset Password bawaan Laravel
-        ResetPassword::toMailUsing(function (object $notifiable, string $token) {
-            
-            // 1. Buat URL dengan token yang aman
-            $url = url(route('password.reset', [
-                'token' => $token,
-                'email' => $notifiable->getEmailForPasswordReset(),
-            ], false));
-
-            // 2. Panggil file blade kustom yang baru saja kita buat
-            return (new MailMessage)
-                ->subject('Aksi Diperlukan: Atur Ulang Password - MediSync')
-                ->view('emails.custom-reset', ['url' => $url]);
+            if (
+                $userRole === 'superadmin' || 
+                $userRole === 'owner' || 
+                (method_exists($user, 'hasRole') && ($user->hasRole('superadmin') || $user->hasRole('owner') || $user->hasRole('Superadmin') || $user->hasRole('Owner')))
+            ) {
+                return true;
+            }
         });
     }
 }

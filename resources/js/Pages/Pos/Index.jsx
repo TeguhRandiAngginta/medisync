@@ -17,7 +17,7 @@ export default function Index({ medicines }) {
     const [payments, setPayments] = useState({ cash: 0, qris: 0, transfer: 0 });
     const [isProcessing, setIsProcessing] = useState(false);
 
-    // === STATE MODAL ===
+    // === STATE MODAL & RESEP ===
     const [showSimulationModal, setShowSimulationModal] = useState(false);
     const [simulationType, setSimulationType] = useState('');
     const [completedSale, setCompletedSale] = useState(null);
@@ -25,6 +25,8 @@ export default function Index({ medicines }) {
     const [prescriptionNumber, setPrescriptionNumber] = useState('');
     const [prescriptionError, setPrescriptionError] = useState('');
     const [isFetchingPrescription, setIsFetchingPrescription] = useState(false);
+
+    const [activePrescriptionId, setActivePrescriptionId] = useState(null);
 
     // === PERHITUNGAN & FILTER ===
     const formatRupiah = (number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number || 0);
@@ -41,7 +43,6 @@ export default function Index({ medicines }) {
     const totalPaid = (payments.cash || 0) + (payments.qris || 0) + (payments.transfer || 0);
     const changeAmount = totalPaid - subtotal;
 
-    // === FUNGSI KERANJANG ===
     const addToCart = (medicine) => {
         const existingItem = cart.find(item => item.medicine_id === medicine.id);
         if (existingItem) {
@@ -71,7 +72,6 @@ export default function Index({ medicines }) {
 
     const removeFromCart = (id) => setCart(cart.filter(item => item.medicine_id !== id));
 
-    // === FUNGSI RESEP (TARIK VIA AXIOS) ===
     const handlePullPrescription = async () => {
         if (!prescriptionNumber) return;
         setIsFetchingPrescription(true);
@@ -80,7 +80,9 @@ export default function Index({ medicines }) {
         try {
             const response = await axios.get(`/api/prescriptions/${prescriptionNumber}`);
             const data = response.data;
-            
+
+            setActivePrescriptionId(data.id);
+
             const newCartItems = data.items.map(item => ({
                 medicine_id: item.medicine_id,
                 name: item.medicine.name,
@@ -89,7 +91,7 @@ export default function Index({ medicines }) {
                 quantity: item.quantity,
                 price: Number(item.medicine.selling_price),
                 max_stock: item.medicine.stock || 999,
-                signa: item.signa // Instruksi Apoteker
+                signa: item.signa
             }));
 
             setCart([...cart, ...newCartItems]);
@@ -102,7 +104,6 @@ export default function Index({ medicines }) {
         }
     };
 
-    // === FUNGSI CHECKOUT & BAYAR ===
     const handleProceedCheckout = () => {
         if (cart.length === 0 || changeAmount < 0) return;
         if ((payments.qris > 0 || payments.transfer > 0)) {
@@ -131,6 +132,7 @@ export default function Index({ medicines }) {
             paid_amount: totalPaid,
             change_amount: changeAmount >= 0 ? changeAmount : 0,
             payment_method: currentMethod,
+            prescription_id: activePrescriptionId,
         }, {
             onSuccess: (page) => {
                 setCompletedSale({
@@ -142,27 +144,32 @@ export default function Index({ medicines }) {
                     change: currentChange,
                     method: currentMethod
                 });
+
                 setCart([]);
+                setActivePrescriptionId(null);
                 setPayments({ cash: 0, qris: 0, transfer: 0 });
                 setSearchQuery('');
                 setIsProcessing(false);
                 setShowSimulationModal(false);
             },
-            onError: () => setIsProcessing(false)
+            onError: () => {
+                setIsProcessing(false);
+                setShowSimulationModal(false);
+            }
         });
     };
 
-    // === FUNGSI PRINT THERMAL ===
     const handlePrintReceipt = () => {
         const printContents = document.getElementById('printable-receipt').innerHTML;
-        let printIframe = document.getElementById('receipt-print-iframe');
-        
-        if (!printIframe) {
-            printIframe = document.createElement('iframe');
-            printIframe.id = 'receipt-print-iframe';
-            Object.assign(printIframe.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: 'none' });
-            document.body.appendChild(printIframe);
-        }
+        const printIframe = document.createElement('iframe');
+        printIframe.style.position = 'fixed';
+        printIframe.style.right = '0';
+        printIframe.style.bottom = '0';
+        printIframe.style.width = '0px';
+        printIframe.style.height = '0px';
+        printIframe.style.border = 'none';
+
+        document.body.appendChild(printIframe);
 
         const iframeDoc = printIframe.contentWindow || printIframe.contentDocument.document || printIframe.contentDocument;
         iframeDoc.document.open();
@@ -191,6 +198,17 @@ export default function Index({ medicines }) {
         setTimeout(() => {
             printIframe.contentWindow.focus();
             printIframe.contentWindow.print();
+
+            printIframe.contentWindow.onafterprint = () => {
+                if (document.body.contains(printIframe)) {
+                    document.body.removeChild(printIframe);
+                }
+            };
+            setTimeout(() => {
+                if (document.body.contains(printIframe)) {
+                    document.body.removeChild(printIframe);
+                }
+            }, 2000);
         }, 300);
     };
 

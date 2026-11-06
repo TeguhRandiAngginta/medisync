@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Medicine extends Model
 {
-    use SoftDeletes;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'medicine_category_id',
@@ -49,6 +50,6 @@ class Medicine extends Model
 
     public function batches()
     {
-        return $this->hasMany(ProductBatch::class, 'product_id', 'id');
+        return $this->hasMany(ProductBatch::class, 'medicine_id');
     }
 }

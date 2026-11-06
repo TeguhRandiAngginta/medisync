@@ -100,11 +100,13 @@ export default function AuthenticatedLayout({ header, children }) {
         );
     };
 
-    const SubNavItem = ({ href, label, path }) => {
+    const SubNavItem = ({ href, label, path, name }) => {
         const active = isActive(path);
+        const targetHref = name ? (route().has(name) ? route(name) : '#') : href;
+
         return (
             <Link 
-                href={href} 
+                href={targetHref} 
                 className={`flex items-center gap-3 px-4 py-2 rounded-xl transition-all duration-200 text-[13px] font-semibold relative
                 ${active 
                     ? 'text-[#48CFA4] bg-white dark:bg-[#1E272E] shadow-sm border border-gray-100 dark:border-gray-800' 

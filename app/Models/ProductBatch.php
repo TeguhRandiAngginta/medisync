@@ -9,14 +9,7 @@ class ProductBatch extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'product_id',
-        'purchase_detail_id',
-        'batch_number',
-        'stock_quantity',
-        'expired_date',
-        'purchase_price',
-    ];
+    protected $guarded = ['id'];
 
     public function product()
     {
@@ -26,5 +19,10 @@ class ProductBatch extends Model
     public function purchaseDetail()
     {
         return $this->belongsTo(PurchaseDetail::class, 'purchase_detail_id');
+    }
+
+    public function medicine()
+    {
+        return $this->belongsTo(Medicine::class, 'medicine_id')->withTrashed();
     }
 }
