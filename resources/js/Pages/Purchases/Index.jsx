@@ -9,7 +9,11 @@ export default function Index({ purchases }) {
     const [printModalOpen, setPrintModalOpen] = useState(false);
     const [activePurchaseToPrint, setActivePurchaseToPrint] = useState(null);
 
-    // STATE BARU: Untuk pengelolaan pilihan checkbox (bulk delete)
+    // STATE BARU: Modal Rincian Detail Item Pembelian
+    const [detailModalOpen, setDetailModalOpen] = useState(false);
+    const [activePurchaseForDetail, setActivePurchaseForDetail] = useState(null);
+
+    // STATE: Untuk pengelolaan pilihan checkbox (bulk delete)
     const [selectedIds, setSelectedIds] = useState([]);
     const [confirmingBulkDeletion, setConfirmingBulkDeletion] = useState(false);
 
@@ -19,7 +23,7 @@ export default function Index({ purchases }) {
     }, [flash]);
 
     const formatRupiah = (number) => {
-        return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number);
+        return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number || 0);
     };
 
     // Fungsi Pilih Semua Checkbox
@@ -71,13 +75,18 @@ export default function Index({ purchases }) {
             case 'completed': return <span className="px-3 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-lg text-xs font-bold uppercase tracking-wider">Selesai</span>;
             case 'draft': return <span className="px-3 py-1 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 rounded-lg text-xs font-bold uppercase tracking-wider">Draft</span>;
             case 'cancelled': return <span className="px-3 py-1 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-lg text-xs font-bold uppercase tracking-wider">Batal</span>;
-            default: return status;
+            default: return status || <span className="px-3 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-lg text-xs font-bold uppercase tracking-wider">Selesai</span>;
         }
     };
 
     const handleOpenPrintModal = (purchase) => {
         setActivePurchaseToPrint(purchase);
         setPrintModalOpen(true);
+    };
+
+    const handleOpenDetailModal = (purchase) => {
+        setActivePurchaseForDetail(purchase);
+        setDetailModalOpen(true);
     };
 
     return (
@@ -92,7 +101,7 @@ export default function Index({ purchases }) {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    {/* Tombol Hapus Massal (Muncul otomatis jika ada data yang dipilih) */}
+                    {/* Tombol Hapus Massal */}
                     {selectedIds.length > 0 && (
                         <button 
                             onClick={() => setConfirmingBulkDeletion(true)}
@@ -173,7 +182,10 @@ export default function Index({ purchases }) {
                                             className="rounded border-gray-300 text-[#48CFA4] focus:ring-[#48CFA4] dark:bg-gray-800 dark:border-gray-700 cursor-pointer"
                                         />
                                     </td>
-                                    <td className="px-6 py-5 font-bold text-[#48CFA4]">{purchase.invoice_number}</td>
+                                    <td className="px-6 py-5 font-bold text-[#48CFA4]">
+                                        {purchase.invoice_number}
+                                        <span className="block text-[10px] text-gray-400 font-normal">Internal: {purchase.internal_receipt_number}</span>
+                                    </td>
                                     <td className="px-6 py-5 text-gray-700 dark:text-gray-200">{purchase.purchase_date}</td>
                                     <td className="px-6 py-5 font-bold text-gray-800 dark:text-gray-200">{purchase.supplier?.name || '-'}</td>
                                     <td className="px-6 py-5 text-right font-mono font-bold text-gray-700 dark:text-gray-200">
@@ -184,6 +196,16 @@ export default function Index({ purchases }) {
                                     </td>
                                     <td className="px-6 py-5 text-center">
                                         <div className="flex items-center justify-center gap-2">
+                                            {/* TOMBOL LIHAT DETAIL ITEM OBAT */}
+                                            <button 
+                                                onClick={() => handleOpenDetailModal(purchase)} 
+                                                title="Lihat Detail Item Obat"
+                                                className="p-2 bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-xl hover:bg-[#48CFA4] hover:text-white transition-colors cursor-pointer"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                            </button>
+
+                                            {/* TOMBOL CETAK BPB / PDF */}
                                             <button 
                                                 onClick={() => handleOpenPrintModal(purchase)} 
                                                 title="Cetak BPB"
@@ -191,6 +213,8 @@ export default function Index({ purchases }) {
                                             >
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                                             </button>
+
+                                            {/* TOMBOL HAPUS */}
                                             <button 
                                                 onClick={() => confirmDelete(purchase)}
                                                 title="Hapus Faktur"
@@ -207,6 +231,76 @@ export default function Index({ purchases }) {
                 </table>
             </div>
 
+            {/* MODAL POP-UP RINCIAN ITEM OBAT FAKTUR */}
+            {detailModalOpen && activePurchaseForDetail && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 p-4">
+                    <div className="bg-white dark:bg-[#1E272E] rounded-3xl max-w-2xl w-full p-6 space-y-4 shadow-2xl border border-gray-100 dark:border-gray-800">
+                        <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-800 pb-3">
+                            <div>
+                                <span className="px-3 py-1 bg-[#EAF5F0] dark:bg-[#253939] text-[#246A55] dark:text-[#67E2B4] rounded-full text-[10px] font-extrabold uppercase tracking-wider">
+                                    Item Obat Terdaftar
+                                </span>
+                                <h3 className="font-extrabold text-gray-800 dark:text-gray-100 text-lg mt-1 font-mono">
+                                    {activePurchaseForDetail.invoice_number}
+                                </h3>
+                                <p className="text-xs text-gray-400">Supplier: {activePurchaseForDetail.supplier?.name || '-'}</p>
+                            </div>
+                            <button
+                                onClick={() => setDetailModalOpen(false)}
+                                className="p-2 bg-gray-100 dark:bg-gray-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-xl transition-colors cursor-pointer"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
+                        </div>
+
+                        {/* TABEL ITEM OBAT */}
+                        <div className="max-h-64 overflow-y-auto">
+                            <table className="w-full text-left text-xs border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-50 dark:bg-[#151E24] text-gray-500 font-bold uppercase">
+                                        <th className="p-3">Nama Obat</th>
+                                        <th className="p-3">No. Batch</th>
+                                        <th className="p-3">Expired Date</th>
+                                        <th className="p-3 text-center">Qty</th>
+                                        <th className="p-3 text-right">Harga Beli</th>
+                                        <th className="p-3 text-right">Subtotal</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 dark:divide-gray-800 text-gray-700 dark:text-gray-300">
+                                    {activePurchaseForDetail.details && activePurchaseForDetail.details.length > 0 ? (
+                                        activePurchaseForDetail.details.map((detail) => (
+                                            <tr key={detail.id}>
+                                                <td className="p-3 font-bold text-gray-800 dark:text-gray-200">
+                                                    {detail.medicine?.name || 'Obat Dihapus'}
+                                                </td>
+                                                <td className="p-3 font-mono text-[#48CFA4]">{detail.batch_number}</td>
+                                                <td className="p-3">{detail.expired_date}</td>
+                                                <td className="p-3 text-center font-bold">{detail.quantity}</td>
+                                                <td className="p-3 text-right">{formatRupiah(detail.purchase_price)}</td>
+                                                <td className="p-3 text-right font-bold text-emerald-500">
+                                                    {formatRupiah(detail.subtotal)}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan="6" className="p-4 text-center text-gray-400 italic">
+                                                Tidak ada rincian item obat.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div className="flex justify-between items-center border-t border-gray-100 dark:border-gray-800 pt-3">
+                            <span className="text-xs text-gray-400 font-bold">Total Nilai Pembelian:</span>
+                            <span className="text-lg font-black text-emerald-500">{formatRupiah(activePurchaseForDetail.total_amount)}</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* MODAL KONFIRMASI HAPUS SATUAN */}
             {confirmingDeletion && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
@@ -219,7 +313,7 @@ export default function Index({ purchases }) {
 
                         <h3 className="text-lg font-extrabold text-gray-800 dark:text-gray-100 mb-2">Hapus Faktur Pembelian?</h3>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                            Anda akan menghapus faktur <strong className="text-gray-800 dark:text-gray-200">{selectedPurchase?.invoice_number}</strong>. Tindakan ini tidak dapat dibatalkan.
+                            Anda akan menghapus faktur <strong className="text-gray-800 dark:text-gray-200">{selectedPurchase?.invoice_number}</strong>. Stok obat di POS akan otomatis terkurangi.
                         </p>
                         <div className="flex justify-center gap-3">
                             <button 
@@ -251,7 +345,7 @@ export default function Index({ purchases }) {
 
                         <h3 className="text-lg font-extrabold text-gray-800 dark:text-gray-100 mb-2">Hapus {selectedIds.length} Faktur Terpilih?</h3>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                            Semua faktur pembelian yang dicentang akan dipindahkan ke tong sampah secara bersamaan.
+                            Semua faktur pembelian yang dicentang akan dipindahkan ke tong sampah secara bersamaan dan stok POS dikurangi.
                         </p>
                         <div className="flex justify-center gap-3">
                             <button 

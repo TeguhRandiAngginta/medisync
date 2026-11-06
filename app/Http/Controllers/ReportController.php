@@ -10,6 +10,7 @@ use App\Models\PurchaseDetail;
 use App\Models\Medicine;
 use App\Exports\ReportExport;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -17,7 +18,7 @@ class ReportController extends Controller
 {
     public function index(Request $request)
     {
-        $period = $request->get('period', 'monthly'); // daily, weekly, monthly, yearly, custom
+        $period = $request->get('period', 'monthly');
         $startDate = $request->get('start_date');
         $endDate = $request->get('end_date');
         $medicineId = $request->get('medicine_id');
@@ -50,10 +51,15 @@ class ReportController extends Controller
 
         foreach ($salesList as $sale) {
             foreach ($sale->details as $detail) {
-                $hppUnit = $detail->medicine->purchase_price ?? ($detail->selling_price * 0.7);
+                // Mengambil purchase_price riil dari sale_details
+                $hppUnit = $detail->purchase_price > 0 
+                    ? $detail->purchase_price 
+                    : ($detail->medicine->purchase_price ?? 0);
+                    
                 $totalHpp += ($detail->quantity * $hppUnit);
             }
         }
+        
         $profit = $totalSales - $totalHpp;
 
         $lowStockCount = Medicine::where('stock', '<=', 10)->count();
@@ -80,24 +86,24 @@ class ReportController extends Controller
 
         return Inertia::render('Reports/Index', [
             'filters' => [
-                'start_date' => $startDate,
-                'end_date' => $endDate,
-                'period' => $period,
+                'start_date'  => $startDate,
+                'end_date'    => $endDate,
+                'period'      => $period,
                 'medicine_id' => $medicineId
             ],
             'summary' => [
-                'total_sales' => (float) $totalSales,
-                'total_hpp' => (float) $totalHpp,
-                'profit' => (float) $profit,
+                'total_sales'        => (float) $totalSales,
+                'total_hpp'          => (float) $totalHpp,
+                'profit'             => (float) $profit,
                 'total_transactions' => $totalTransactions,
-                'low_stock' => $lowStockCount,
+                'low_stock'          => $lowStockCount,
             ],
-            'salesList' => $salesList,
-            'calendarData' => $calendarData,
-            'monthSales' => $monthSales,
+            'salesList'      => $salesList,
+            'calendarData'   => $calendarData,
+            'monthSales'     => $monthSales,
             'stockMutations' => $stockMutations,
-            'medicinesList' => $medicinesList,
-            'calendarMonth' => Carbon::parse($startDate)->format('Y-m-d')
+            'medicinesList'  => $medicinesList,
+            'calendarMonth'  => Carbon::parse($startDate)->format('Y-m-d')
         ]);
     }
 
@@ -114,15 +120,15 @@ class ReportController extends Controller
 
         $purchases = $purchasesQuery->get()->map(function($item) {
             return [
-                'date' => $item->purchase->purchase_date,
-                'medicine_id' => $item->medicine_id,
+                'date'          => $item->purchase->purchase_date,
+                'medicine_id'   => $item->medicine_id,
                 'medicine_name' => $item->medicine->name ?? 'Obat',
-                'sku' => $item->medicine->sku ?? '-',
-                'type' => 'IN',
-                'reference' => $item->purchase->invoice_number,
-                'description' => 'Pembelian dari Supplier: ' . ($item->purchase->supplier->name ?? 'PBF'),
-                'quantity' => (int) $item->quantity,
-                'uom' => $item->uom ?? 'Tablet',
+                'sku'           => $item->medicine->sku ?? '-',
+                'type'          => 'IN',
+                'reference'     => $item->purchase->invoice_number,
+                'description'   => 'Pembelian dari Supplier: ' . ($item->purchase->supplier->name ?? 'PBF'),
+                'quantity'      => (int) $item->quantity,
+                'uom'           => $item->uom ?? 'Tablet',
             ];
         });
 
@@ -137,15 +143,15 @@ class ReportController extends Controller
 
         $sales = $salesQuery->get()->map(function($item) {
             return [
-                'date' => $item->sale->sale_date,
-                'medicine_id' => $item->medicine_id,
+                'date'          => $item->sale->sale_date,
+                'medicine_id'   => $item->medicine_id,
                 'medicine_name' => $item->medicine->name ?? 'Obat',
-                'sku' => $item->medicine->sku ?? '-',
-                'type' => 'OUT',
-                'reference' => $item->sale->invoice_number,
-                'description' => 'Penjualan Kasir (Operator: ' . ($item->sale->user->name ?? 'Kasir') . ')',
-                'quantity' => (int) $item->quantity,
-                'uom' => $item->medicine->base_unit ?? 'Tablet',
+                'sku'           => $item->medicine->sku ?? '-',
+                'type'          => 'OUT',
+                'reference'     => $item->sale->invoice_number,
+                'description'   => 'Penjualan Kasir (Operator: ' . ($item->sale->user->name ?? 'Kasir') . ')',
+                'quantity'      => (int) $item->quantity,
+                'uom'           => $item->medicine->base_unit ?? 'Tablet',
             ];
         });
 
@@ -154,8 +160,8 @@ class ReportController extends Controller
 
     public function export(Request $request)
     {
-        $type = $request->get('type', 'sales'); // sales, purchase, profit, stock, mutations
-        $format = $request->get('format', 'pdf'); // pdf, excel
+        $type = $request->get('type', 'sales');
+        $format = $request->get('format', 'pdf');
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
         $medicineId = $request->get('medicine_id');
@@ -192,5 +198,40 @@ class ReportController extends Controller
         }
 
         return view('reports.print', compact('type', 'data', 'startDate', 'endDate', 'title'));
+    }
+
+    public function profitLoss(Request $request)
+    {
+        $startDate = $request->input('start_date', date('Y-m-01'));
+        $endDate = $request->input('end_date', date('Y-m-t'));
+
+        $sales = Sale::with('details')
+            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->get();
+
+        $totalRevenue = 0;
+        $totalHPP = 0;
+
+        foreach ($sales as $sale) {
+            $totalRevenue += $sale->total_amount;
+            foreach ($sale->details as $detail) {
+                $hppUnit = $detail->purchase_price > 0 
+                    ? $detail->purchase_price 
+                    : ($detail->medicine->purchase_price ?? 0);
+
+                $totalHPP += ($hppUnit * $detail->quantity);
+            }
+        }
+
+        $grossProfit = $totalRevenue - $totalHPP;
+
+        return Inertia::render('Reports/ProfitLoss', [
+            'startDate'    => $startDate,
+            'endDate'      => $endDate,
+            'totalRevenue' => $totalRevenue,
+            'totalHPP'     => $totalHPP,
+            'grossProfit'  => $grossProfit,
+            'profitMargin' => $totalRevenue > 0 ? round(($grossProfit / $totalRevenue) * 100, 2) : 0,
+        ]);
     }
 }

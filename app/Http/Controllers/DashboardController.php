@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Inertia\Inertia;
 use App\Models\Sale;
 use App\Models\Medicine;
+use App\Services\AlertService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,16 +14,18 @@ class DashboardController extends Controller
 {
     public function index(Request $request)
     {
+        $expiringBatches = AlertService::getExpiringBatches(90);
+        $lowStockMedicines = AlertService::getLowStockMedicines();
+        
         $filter = $request->get('period', 'daily');
-
         $today = Carbon::today();
         
         $todayRevenue = Sale::whereDate('sale_date', $today)->sum('total_amount');
         $todayTransactions = Sale::whereDate('sale_date', $today)->count();
         
-        $lowStockCount = Medicine::whereColumn('current_stock', '<=', 'min_stock')->count();
+        $lowStockCount = Medicine::whereColumn('stock', '<=', 'min_stock')->count();
         $activeMedicines = Medicine::where('is_active', true)->count();
-        
+
         $chartData = [];
         if ($filter == 'weekly') {
             for ($i = 3; $i >= 0; $i--) {
@@ -30,7 +33,7 @@ class DashboardController extends Controller
                 $end = Carbon::now()->subWeeks($i)->endOfWeek();
                 $total = Sale::whereBetween('sale_date', [$start, $end])->sum('total_amount');
                 $chartData[] = [
-                    'name' => 'Minggu ' . (4 - $i), 
+                    'name' => 'Minggu ' . (4 - $i), // Syntax error '-' diperbaiki
                     'total' => (float) $total
                 ];
             }
@@ -101,6 +104,8 @@ class DashboardController extends Controller
 
         return Inertia::render('Dashboard/Index', [
             'stats' => [
+                'expiringBatches' => $expiringBatches,
+                'lowStockMedicines' => $lowStockMedicines,
                 'todayRevenue' => (float) $todayRevenue,
                 'todayTransactions' => $todayTransactions,
                 'lowStockCount' => $lowStockCount,

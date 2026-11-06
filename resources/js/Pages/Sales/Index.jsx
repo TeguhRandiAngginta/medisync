@@ -89,40 +89,93 @@ export default function Index({ sales, isTrash }) {
 
         let title = '';
         let message = '';
-        let routeName = '';
-        let method = 'delete';
+        let actionCallback = null;
 
         if (actionType === 'delete') {
             title = 'Pindahkan Terpilih ke Sampah?';
             message = `Anda akan memindahkan ${selectedIds.length} transaksi terpilih ke sampah.`;
-            routeName = 'sales.destroy';
+            actionCallback = () => {
+                router.post(route('sales.bulk-destroy'), { ids: selectedIds }, {
+                    onSuccess: () => {
+                        setConfirmModal({ show: false });
+                        setSelectedIds([]);
+                    }
+                });
+            };
         } else if (actionType === 'restore') {
             title = 'Pulihkan Terpilih?';
             message = `Pulihkan ${selectedIds.length} transaksi terpilih kembali ke aktif.`;
-            routeName = 'sales.restore';
-            method = 'post';
+            actionCallback = () => {
+                router.post(route('sales.bulk-restore'), { ids: selectedIds }, {
+                    onSuccess: () => {
+                        setConfirmModal({ show: false });
+                        setSelectedIds([]);
+                    }
+                });
+            };
         } else if (actionType === 'force-delete') {
             title = 'Hapus Permanen Terpilih?';
             message = `PERINGATAN: ${selectedIds.length} transaksi akan dihapus permanen secara massal!`;
-            routeName = 'sales.force-delete';
+            actionCallback = () => {
+                selectedIds.forEach(id => {
+                    router.delete(route('sales.force-delete', id), { preserveScroll: true });
+                });
+                setConfirmModal({ show: false });
+                setSelectedIds([]);
+            };
         }
 
         setConfirmModal({
             show: true,
             title,
             message,
-            action: () => {
-                selectedIds.forEach(id => {
-                    if (method === 'post') {
-                        router.post(route(routeName, id), {}, { preserveScroll: true });
-                    } else {
-                        router.delete(route(routeName, id), { preserveScroll: true });
-                    }
-                });
-                setConfirmModal({ show: false });
-                setSelectedIds([]);
-            }
+            action: actionCallback
         });
+    };
+
+    const printHtmlContent = (htmlContent, title = 'Cetak Struk') => {
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0px';
+        iframe.style.height = '0px';
+        iframe.style.border = 'none';
+
+        document.body.appendChild(iframe);
+
+        const iframeDoc = iframe.contentWindow || iframe.contentDocument.document || iframe.contentDocument;
+        iframeDoc.document.open();
+        iframeDoc.document.write(`
+            <html>
+                <head>
+                    <title>${title}</title>
+                    <style>
+                        @page { size: 58mm auto; margin: 0; }
+                        body { font-family: 'Courier New', Courier, monospace; font-size: 11px; width: 58mm; margin: 0; padding: 5px; color: #000; }
+                    </style>
+                </head>
+                <body>${htmlContent}</body>
+            </html>
+        `);
+        iframeDoc.document.close();
+
+        setTimeout(() => {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+
+            iframe.contentWindow.onafterprint = () => {
+                if (document.body.contains(iframe)) {
+                    document.body.removeChild(iframe);
+                }
+            };
+
+            setTimeout(() => {
+                if (document.body.contains(iframe)) {
+                    document.body.removeChild(iframe);
+                }
+            }, 2000);
+        }, 300);
     };
 
     const handleBulkPrint = () => {
@@ -156,76 +209,14 @@ export default function Index({ sales, isTrash }) {
             `;
         });
 
-        let printIframe = document.getElementById('receipt-print-iframe');
-        if (!printIframe) {
-            printIframe = document.createElement('iframe');
-            printIframe.id = 'receipt-print-iframe';
-            printIframe.style.position = 'fixed';
-            printIframe.style.right = '0';
-            printIframe.style.bottom = '0';
-            printIframe.style.width = '0';
-            printIframe.style.height = '0';
-            printIframe.style.border = 'none';
-            document.body.appendChild(printIframe);
-        }
-
-        const iframeDoc = printIframe.contentWindow || printIframe.contentDocument.document || printIframe.contentDocument;
-        iframeDoc.document.open();
-        iframeDoc.document.write(`
-            <html>
-                <head>
-                    <title>Cetak Struk Massal</title>
-                    <style>
-                        @page { size: 58mm auto; margin: 0; }
-                        body { font-family: 'Courier New', Courier, monospace; font-size: 11px; width: 58mm; margin: 0; padding: 5px; color: #000; }
-                    </style>
-                </head>
-                <body>${combinedHtml}</body>
-            </html>
-        `);
-        iframeDoc.document.close();
-        
-        setTimeout(() => {
-            printIframe.contentWindow.focus();
-            printIframe.contentWindow.print();
-        }, 300);
+        printHtmlContent(combinedHtml, 'Cetak Struk Massal');
     };
 
     const executePrintSingle = () => {
-        const printContents = document.getElementById('modal-printable-receipt').innerHTML;
-        let printIframe = document.getElementById('receipt-print-iframe');
-        if (!printIframe) {
-            printIframe = document.createElement('iframe');
-            printIframe.id = 'receipt-print-iframe';
-            printIframe.style.position = 'fixed';
-            printIframe.style.right = '0';
-            printIframe.style.bottom = '0';
-            printIframe.style.width = '0';
-            printIframe.style.height = '0';
-            printIframe.style.border = 'none';
-            document.body.appendChild(printIframe);
+        const printContents = document.getElementById('modal-printable-receipt')?.innerHTML || '';
+        if (printContents) {
+            printHtmlContent(printContents, 'Cetak Struk');
         }
-
-        const iframeDoc = printIframe.contentWindow || printIframe.contentDocument.document || printIframe.contentDocument;
-        iframeDoc.document.open();
-        iframeDoc.document.write(`
-            <html>
-                <head>
-                    <title>Cetak Struk</title>
-                    <style>
-                        @page { size: 58mm auto; margin: 0; }
-                        body { font-family: 'Courier New', Courier, monospace; font-size: 11px; width: 58mm; margin: 0; padding: 5px; color: #000; }
-                    </style>
-                </head>
-                <body>${printContents}</body>
-            </html>
-        `);
-        iframeDoc.document.close();
-        
-        setTimeout(() => {
-            printIframe.contentWindow.focus();
-            printIframe.contentWindow.print();
-        }, 300);
     };
 
     return (

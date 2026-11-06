@@ -8,6 +8,7 @@ use App\Models\Supplier;
 use App\Models\Medicine;
 use App\Models\AuditLog;
 use App\Models\ProductBatch;
+use App\Services\InventoryService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
@@ -16,9 +17,11 @@ class PurchaseController extends Controller
 {
     public function index()
     {
-        $purchases = Purchase::with(['supplier', 'user'])
-            ->latest()
-            ->get();
+        $purchases = Purchase::with(['supplier', 'user', 'details.medicine' => function($q) {
+            $q->withTrashed();
+        }])
+        ->latest()
+        ->get();
 
         return Inertia::render('Purchases/Index', [
             'purchases' => $purchases
@@ -48,23 +51,6 @@ class PurchaseController extends Controller
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.uom' => 'required|string|max:50',
             'items.*.purchase_price' => 'required|numeric|min:0',
-        ], [
-            'internal_receipt_number.required' => 'Nomor penerimaan internal wajib ada.',
-            'internal_receipt_number.unique' => 'Nomor penerimaan internal ini sudah terdaftar di sistem.',
-            'invoice_number.required' => 'Nomor faktur PBF asli wajib diisi.',
-            'supplier_id.required' => 'Silakan pilih supplier PBF terlebih dahulu.',
-            'supplier_id.exists' => 'Supplier yang dipilih tidak valid.',
-            'purchase_date.required' => 'Tanggal faktur wajib diisi.',
-            'items.required' => 'Minimal harus ada 1 item obat yang dimasukkan.',
-            'items.*.medicine_id.required' => 'Pilih obat master terlebih dahulu.',
-            'items.*.medicine_id.exists' => 'Data obat master tidak ditemukan.',
-            'items.*.batch_number.required' => 'Nomor batch pabrik wajib diisi.',
-            'items.*.expired_date.required' => 'Tanggal kadaluarsa wajib diisi.',
-            'items.*.expired_date.after_or_equal' => 'Masa berlaku (expired date) obat terlalu dekat! Standar apotek minimal 6 bulan ke depan dari hari ini.',
-            'items.*.quantity.required' => 'Jumlah kuantitas obat wajib diisi.',
-            'items.*.quantity.min' => 'Jumlah kuantitas minimal adalah 1.',
-            'items.*.purchase_price.required' => 'Harga beli wajib diisi.',
-            'items.*.purchase_price.min' => 'Harga beli tidak boleh bernilai negatif.',
         ]);
 
         DB::beginTransaction();
@@ -95,8 +81,8 @@ class PurchaseController extends Controller
                     'subtotal' => $item['quantity'] * $item['purchase_price'],
                 ]);
 
-                \App\Models\ProductBatch::create([
-                    'product_id' => $item['medicine_id'],
+                ProductBatch::create([
+                    'medicine_id' => $item['medicine_id'],
                     'purchase_detail_id' => $detail->id,
                     'batch_number' => strtoupper($item['batch_number']),
                     'stock_quantity' => $item['quantity'],
@@ -104,17 +90,16 @@ class PurchaseController extends Controller
                     'purchase_price' => $item['purchase_price'],
                 ]);
 
-                $medicine = Medicine::find($item['medicine_id']);
-                if ($medicine) {
-                    $medicine->increment('stock', $item['quantity']);
-                }
+                InventoryService::syncMedicineStock($item['medicine_id']);
             }
 
-            AuditLog::record(
-                'pembelian', 
-                'CREATE', 
-                "Mencatat faktur pembelian PBF No: {$purchase->invoice_number} dengan total Rp " . number_format($purchase->total_amount, 0, ',', '.')
-            );
+            if (class_exists(AuditLog::class)) {
+                AuditLog::record(
+                    'pembelian', 
+                    'CREATE', 
+                    "Mencatat faktur pembelian PBF No: {$purchase->invoice_number} senilai Rp " . number_format($purchase->total_amount, 0, ',', '.')
+                );
+            }
 
             DB::commit();
 
@@ -128,19 +113,6 @@ class PurchaseController extends Controller
         }
     }
 
-    public function printPdf(Purchase $purchase)
-    {
-        $purchase->load(['supplier', 'user', 'details.medicine']);
-
-        $pdf = Pdf::loadView('pdf.purchase-receipt', compact('purchase'));
-        
-        $pdf->setPaper('a4', 'portrait');
-
-        return $pdf->stream('BPB-' . $purchase->internal_receipt_number . '.pdf', [
-            'Content-Type' => 'application/pdf',
-        ]);
-    }
-
     public function destroy(Purchase $purchase)
     {
         DB::beginTransaction();
@@ -149,32 +121,154 @@ class PurchaseController extends Controller
             $invoiceNumber = $purchase->invoice_number;
             
             foreach ($purchase->details as $detail) {
-                $medicine = Medicine::find($detail->medicine_id);
-                if ($medicine) {
-                    // Pastikan stok tidak minus menggunakan operator minus (-) yang benar
-                    $newStock = max(0, $medicine->stock - $detail->quantity);
-                    $medicine->update(['stock' => $newStock]);
-                }
+                // Hapus batch obat agar stok POS berkurang
+                ProductBatch::where('purchase_detail_id', $detail->id)->delete();
+
+                // Hitung ulang stok POS
+                InventoryService::syncMedicineStock($detail->medicine_id);
             }
 
-            AuditLog::record(
-                'pembelian', 
-                'DELETE', 
-                "Menghapus faktur pembelian PBF No: {$invoiceNumber} senilai Rp " . number_format($purchase->total_amount, 0, ',', '.')
-            );
-
-            $purchase->details()->delete();
+            // Hapus faktur (soft delete)
             $purchase->delete();
+
+            if (class_exists(AuditLog::class)) {
+                AuditLog::record(
+                    'pembelian', 
+                    'DELETE', 
+                    "Menghapus faktur pembelian PBF No: {$invoiceNumber} senilai Rp " . number_format($purchase->total_amount, 0, ',', '.')
+                );
+            }
 
             DB::commit();
 
             return redirect()->route('purchases.index')
-                ->with('success', "Faktur pembelian {$invoiceNumber} berhasil dihapus.");
+                ->with('success', "Faktur pembelian {$invoiceNumber} berhasil dipindahkan ke tong sampah.");
 
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['message' => 'Gagal menghapus pembelian: ' . $e->getMessage()]);
         }
+    }
+
+    public function bulkDestroy(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:purchases,id',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $purchases = Purchase::with('details')->whereIn('id', $validated['ids'])->get();
+
+            foreach ($purchases as $purchase) {
+                foreach ($purchase->details as $detail) {
+                    ProductBatch::where('purchase_detail_id', $detail->id)->delete();
+                    InventoryService::syncMedicineStock($detail->medicine_id);
+                }
+                $purchase->delete();
+            }
+
+            if (class_exists(AuditLog::class)) {
+                AuditLog::record('pembelian', 'BULK_DELETE', 'Menghapus massal ' . count($purchases) . ' faktur pembelian.');
+            }
+
+            DB::commit();
+            return redirect()->route('purchases.index')->with('success', count($purchases) . ' faktur pembelian berhasil dipindahkan ke tong sampah.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal menghapus massal: ' . $e->getMessage()]);
+        }
+    }
+
+    public function restore($id)
+    {
+        DB::beginTransaction();
+        try {
+            $purchase = Purchase::onlyTrashed()->with('details')->findOrFail($id);
+            
+            // 1. Pulihkan data faktur (purchases)
+            $purchase->restore();
+
+            // 2. Buat ulang ProductBatch untuk tiap detail obat jika belum ada
+            foreach ($purchase->details as $detail) {
+                $batch = ProductBatch::where('purchase_detail_id', $detail->id)->first();
+                
+                if (!$batch) {
+                    ProductBatch::create([
+                        'medicine_id'        => $detail->medicine_id,
+                        'purchase_detail_id' => $detail->id,
+                        'batch_number'       => $detail->batch_number,
+                        'stock_quantity'     => $detail->quantity,
+                        'expired_date'       => $detail->expired_date,
+                        'purchase_price'     => $detail->purchase_price,
+                    ]);
+                }
+
+                // 3. Kembalikan stok di POS
+                InventoryService::syncMedicineStock($detail->medicine_id);
+            }
+
+            if (class_exists(AuditLog::class)) {
+                AuditLog::record(
+                    'pembelian', 
+                    'RESTORE', 
+                    "Memulihkan data faktur pembelian PBF No: {$purchase->invoice_number} dari tong sampah."
+                );
+            }
+
+            DB::commit();
+            return redirect()->route('purchases.trash')
+                ->with('success', "Faktur pembelian {$purchase->invoice_number} berhasil dipulihkan dan stok POS telah kembali.");
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal memulihkan data: ' . $e->getMessage()]);
+        }
+    }
+
+    public function forceDelete($id)
+    {
+        DB::beginTransaction();
+        try {
+            $purchase = Purchase::onlyTrashed()->with('details')->findOrFail($id);
+            $invoiceNumber = $purchase->invoice_number;
+
+            foreach ($purchase->details as $detail) {
+                ProductBatch::where('purchase_detail_id', $detail->id)->delete();
+                InventoryService::syncMedicineStock($detail->medicine_id);
+            }
+
+            $purchase->details()->delete();
+            $purchase->forceDelete();
+
+            if (class_exists(AuditLog::class)) {
+                AuditLog::record(
+                    'pembelian', 
+                    'FORCE DELETE', 
+                    "Menghapus PERMANEN faktur pembelian PBF No: {$invoiceNumber} dari database."
+                );
+            }
+
+            DB::commit();
+            return redirect()->route('purchases.trash')
+                ->with('success', "Faktur pembelian {$invoiceNumber} berhasil dimusnahkan secara permanen.");
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal menghapus permanen data: ' . $e->getMessage()]);
+        }
+    }
+
+    public function printPdf(Purchase $purchase)
+    {
+        $purchase->load(['supplier', 'user', 'details.medicine']);
+        $pdf = Pdf::loadView('pdf.purchase-receipt', compact('purchase'));
+        $pdf->setPaper('a4', 'portrait');
+
+        return $pdf->stream('BPB-' . $purchase->internal_receipt_number . '.pdf', [
+            'Content-Type' => 'application/pdf',
+        ]);
     }
 
     public function trash()
@@ -189,103 +283,35 @@ class PurchaseController extends Controller
         ]);
     }
 
-    public function restore($id)
-    {
-        DB::beginTransaction();
-        try {
-            $purchase = Purchase::onlyTrashed()->findOrFail($id);
-            
-            $purchase->restore();
-            $purchase->details()->restore();
-
-            if (class_exists(\App\Models\AuditLog::class)) {
-                \App\Models\AuditLog::record(
-                    'pembelian', 
-                    'RESTORE', 
-                    "Memulihkan data faktur pembelian PBF No: {$purchase->invoice_number} dari tong sampah."
-                );
-            }
-
-            DB::commit();
-            return redirect()->route('purchases.trash')
-                ->with('success', "Faktur pembelian {$purchase->invoice_number} berhasil dipulihkan.");
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->withErrors(['message' => 'Gagal memulihkan data: ' . $e->getMessage()]);
-        }
-    }
-
-    public function forceDelete($id)
-    {
-        DB::beginTransaction();
-        try {
-            $purchase = Purchase::onlyTrashed()->findOrFail($id);
-            $invoiceNumber = $purchase->invoice_number;
-
-            if (class_exists(\App\Models\AuditLog::class)) {
-                \App\Models\AuditLog::record(
-                    'pembelian', 
-                    'FORCE DELETE', 
-                    "Menghapus PERMANEN faktur pembelian PBF No: {$invoiceNumber} dari database."
-                );
-            }
-
-            $purchase->details()->forceDelete();
-            $purchase->forceDelete();
-
-            DB::commit();
-            return redirect()->route('purchases.trash')
-                ->with('success', "Faktur pembelian {$invoiceNumber} berhasil dimusnahkan secara permanen.");
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->withErrors(['message' => 'Gagal menghapus permanen data: ' . $e->getMessage()]);
-        }
-    }
-
     public function batchesIndex()
     {
-        $batches = \App\Models\ProductBatch::with(['product', 'purchaseDetail.purchase.supplier'])
-            ->where('stock_quantity', '>', 0)
-            ->orderBy('expired_date', 'asc')
-            ->get();
+        $batches = ProductBatch::with([
+            'medicine' => function ($query) {
+                $query->withTrashed();
+            }, 
+            'purchaseDetail.medicine' => function ($query) {
+                $query->withTrashed();
+            },
+            'purchaseDetail.purchase.supplier'
+        ])
+        ->where('stock_quantity', '>', 0)
+        ->orderBy('expired_date', 'asc')
+        ->get()
+        ->map(function ($batch) {
+            if (!$batch->medicine || $batch->medicine->trashed()) {
+                $fallbackMedicineName = $batch->purchaseDetail?->medicine?->name;
+                if ($fallbackMedicineName) {
+                    $batch->setRelation('medicine', new \App\Models\Medicine([
+                        'name' => $fallbackMedicineName,
+                        'sku'  => $batch->purchaseDetail?->medicine?->sku ?? 'SKU-LEGACY'
+                    ]));
+                }
+            }
+            return $batch;
+        });
 
         return Inertia::render('Purchases/Batches', [
             'batches' => $batches
         ]);
-    }
-
-    public function bulkDestroy(Request $request)
-    {
-        $request->validate([
-            'ids' => 'required|array',
-            'ids.*' => 'exists:purchases,id',
-        ]);
-
-        DB::beginTransaction();
-        try {
-            $purchases = Purchase::whereIn('id', $request->ids)->with('details')->get();
-
-            foreach ($purchases as $purchase) {
-                foreach ($purchase->details as $detail) {
-                    $medicine = Medicine::find($detail->medicine_id);
-                    if ($medicine) {
-                        $newStock = max(0, $medicine->stock - $detail->quantity);
-                        $medicine->update(['stock' => $newStock]);
-                    }
-                }
-                $purchase->details()->delete();
-                $purchase->delete();
-            }
-
-            AuditLog::record('pembelian', 'DELETE', "Menghapus massal " . count($request->ids) . " faktur pembelian.");
-
-            DB::commit();
-            return back()->with('success', count($request->ids) . ' faktur pembelian berhasil dihapus.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->withErrors(['message' => 'Gagal menghapus data massal: ' . $e->getMessage()]);
-        }
     }
 }
