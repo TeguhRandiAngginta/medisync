@@ -15,6 +15,18 @@ use Illuminate\Support\Facades\DB;
 
 class PurchaseController extends Controller
 {
+    private function checkOwnerAccess()
+    {
+        $user = auth()->user();
+        $roleSlug = $user->role->slug ?? '';
+
+        if (!in_array($roleSlug, ['superadmin', 'owner'])) {
+            abort(redirect()->back()->withErrors([
+                'authorization' => 'Akses Ditolak: Hanya Owner atau Superadmin yang memiliki hak akses untuk mengubah data faktur pembelian.'
+            ]));
+        }
+    }
+
     public function index()
     {
         $purchases = Purchase::with(['supplier', 'user', 'details.medicine' => function($q) {
@@ -115,18 +127,18 @@ class PurchaseController extends Controller
 
     public function destroy(Purchase $purchase)
     {
+        $this->checkOwnerAccess();
+
         DB::beginTransaction();
         try {
             $purchase->load('details');
             $invoiceNumber = $purchase->invoice_number;
             
             foreach ($purchase->details as $detail) {
-                // Soft delete batch obat agar hilang dari POS & Monitoring FEFO sementara
                 ProductBatch::where('purchase_detail_id', $detail->id)->delete();
                 InventoryService::syncMedicineStock($detail->medicine_id);
             }
 
-            // Soft delete faktur utama (masuk ke Keranjang Sampah / Trash)
             $purchase->delete();
 
             if (class_exists(AuditLog::class)) {
@@ -150,6 +162,8 @@ class PurchaseController extends Controller
 
     public function bulkDestroy(Request $request)
     {
+        $this->checkOwnerAccess();
+
         $validated = $request->validate([
             'ids' => 'required|array',
             'ids.*' => 'exists:purchases,id',
@@ -163,11 +177,8 @@ class PurchaseController extends Controller
             foreach ($purchases as $purchase) {
                 foreach ($purchase->details as $detail) {
                     $affectedMedicineIds[] = $detail->medicine_id;
-                    // Soft delete batch terkait agar hilang dari POS & Monitoring FEFO sementara
                     ProductBatch::where('purchase_detail_id', $detail->id)->delete();
                 }
-                
-                // Soft delete faktur (masuk ke Trash)
                 $purchase->delete();
             }
 
@@ -191,19 +202,17 @@ class PurchaseController extends Controller
 
     public function restore($id)
     {
+        $this->checkOwnerAccess();
+
         DB::beginTransaction();
         try {
             $purchase = Purchase::onlyTrashed()->with('details')->findOrFail($id);
-            
-            // Pulihkan faktur dari Trash
             $purchase->restore();
 
             $affectedMedicineIds = [];
 
             foreach ($purchase->details as $detail) {
                 $affectedMedicineIds[] = $detail->medicine_id;
-                
-                // Pulihkan (Restore) batch obat yang tadinya ikut ter-soft-delete
                 ProductBatch::onlyTrashed()
                     ->where('purchase_detail_id', $detail->id)
                     ->restore();
@@ -234,15 +243,14 @@ class PurchaseController extends Controller
 
     public function forceDelete($id)
     {
+        $this->checkOwnerAccess();
+
         DB::beginTransaction();
         try {
             $purchase = Purchase::onlyTrashed()->with('details')->findOrFail($id);
-            
-            // PERBAIKAN: Menambahkan tanda dolar ($) di depan variabel invoiceNumber
             $invoiceNumber = $purchase->invoice_number;
 
             foreach ($purchase->details as $detail) {
-                // Hapus permanen batch obat dari database
                 ProductBatch::onlyTrashed()->where('purchase_detail_id', $detail->id)->forceDelete();
                 InventoryService::syncMedicineStock($detail->medicine_id);
             }
