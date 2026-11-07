@@ -186,40 +186,20 @@ class PurchaseController extends Controller
         DB::beginTransaction();
         try {
             $purchase = Purchase::onlyTrashed()->with('details')->findOrFail($id);
-            
-            // 1. Pulihkan data faktur (purchases)
+
             $purchase->restore();
-
-            // 2. Buat ulang ProductBatch untuk tiap detail obat jika belum ada
-            foreach ($purchase->details as $detail) {
-                $batch = ProductBatch::where('purchase_detail_id', $detail->id)->first();
-                
-                if (!$batch) {
-                    ProductBatch::create([
-                        'medicine_id'        => $detail->medicine_id,
-                        'purchase_detail_id' => $detail->id,
-                        'batch_number'       => $detail->batch_number,
-                        'stock_quantity'     => $detail->quantity,
-                        'expired_date'       => $detail->expired_date,
-                        'purchase_price'     => $detail->purchase_price,
-                    ]);
-                }
-
-                // 3. Kembalikan stok di POS
-                InventoryService::syncMedicineStock($detail->medicine_id);
-            }
 
             if (class_exists(AuditLog::class)) {
                 AuditLog::record(
                     'pembelian', 
                     'RESTORE', 
-                    "Memulihkan data faktur pembelian PBF No: {$purchase->invoice_number} dari tong sampah."
+                    "Memulihkan arsip faktur pembelian PBF No: {$purchase->invoice_number} dari tong sampah (Tanpa mutasi stok otomatis)."
                 );
             }
 
             DB::commit();
             return redirect()->route('purchases.trash')
-                ->with('success', "Faktur pembelian {$purchase->invoice_number} berhasil dipulihkan dan stok POS telah kembali.");
+                ->with('success', "Arsip faktur pembelian {$purchase->invoice_number} berhasil dipulihkan.");
 
         } catch (\Exception $e) {
             DB::rollBack();

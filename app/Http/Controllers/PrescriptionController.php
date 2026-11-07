@@ -79,12 +79,10 @@ class PrescriptionController extends Controller
                     'quantity'        => $item['quantity'],
                     'signa'           => $item['signa'],
                 ]);
-
-                InventoryService::deductStockFEFO($item['medicine_id'], $item['quantity']);
             }
 
             DB::commit();
-            return redirect()->route('prescriptions.index')->with('success', 'Resep berhasil dicatat dan stok batch telah diperbarui!');
+            return redirect()->route('prescriptions.index')->with('success', 'Resep berhasil dicatat! Stok akan dipotong saat resep ditebus di Kasir.');
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['message' => 'Gagal menyimpan resep: ' . $e->getMessage()]);
