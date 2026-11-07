@@ -1,6 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router } from '@inertiajs/react';
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 
 // Impor Komponen Anak
@@ -14,6 +14,7 @@ export default function Index({ medicines }) {
     // === STATE UTAMA ===
     const [cart, setCart] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
+    const [dbMedicines, setDbMedicines] = useState(medicines || []);
     const [payments, setPayments] = useState({ cash: 0, qris: 0, transfer: 0 });
     const [isProcessing, setIsProcessing] = useState(false);
 
@@ -31,13 +32,20 @@ export default function Index({ medicines }) {
     // === PERHITUNGAN & FILTER ===
     const formatRupiah = (number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number || 0);
 
-    const filteredMedicines = useMemo(() => {
-        return medicines.filter(medicine => 
-            medicine.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            medicine.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (medicine.barcode && medicine.barcode.includes(searchQuery))
-        );
-    }, [medicines, searchQuery]);
+    useEffect(() => {
+        const timer = setTimeout(async () => {
+            try {
+                const res = await axios.get('/api/pos/medicines', { params: { q: searchQuery } });
+                setDbMedicines(res.data);
+            } catch (error) {
+                console.error("Gagal mengambil data obat", error);
+            }
+        }, 300); // 300ms debounce
+
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    const filteredMedicines = dbMedicines;
 
     const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     const totalPaid = (payments.cash || 0) + (payments.qris || 0) + (payments.transfer || 0);

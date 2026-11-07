@@ -39,6 +39,37 @@ class PosController extends Controller
         ]);
     }
 
+    public function searchMedicines(Request $request)
+    {
+        $query = $request->get('q');
+        $today = now()->toDateString();
+
+        $medicines = Medicine::where('is_active', true)
+            ->when($query, function ($q) use ($query) {
+                $q->where(function ($sub) use ($query) {
+                    $sub->where('name', 'like', "%{$query}%")
+                        ->orWhere('sku', 'like', "%{$query}%")
+                        ->orWhere('barcode', $query);
+                });
+            })
+            ->whereHas('batches', function ($q) use ($today) {
+                $q->where('stock_quantity', '>', 0)->where('expired_date', '>=', $today);
+            })
+            ->withSum(['batches as real_stock' => function ($q) use ($today) {
+                $q->where('stock_quantity', '>', 0)->where('expired_date', '>=', $today);
+            }], 'stock_quantity')
+            ->limit(20) 
+            ->get()
+            ->map(function ($medicine) {
+                $medicine->stock = (int) ($medicine->real_stock ?? 0);
+                return $medicine;
+            })
+            ->filter(fn($m) => $m->stock > 0)
+            ->values();
+
+        return response()->json($medicines);
+    }
+
     public function store(Request $request)
     {
         $request->validate([

@@ -11,7 +11,11 @@ class Sale extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $guarded = ['id'];
+    protected $fillable = [
+        'invoice_number', 'user_id', 'total_amount', 'subtotal_amount',
+        'discount_amount', 'paid_amount', 'change_amount', 'payment_method',
+        'customer_name', 'sale_date', 'status'
+    ];
 
     public function details()
     {
