@@ -185,21 +185,56 @@ class PurchaseController extends Controller
     {
         DB::beginTransaction();
         try {
-            $purchase = Purchase::onlyTrashed()->with('details')->findOrFail($id);
-
+            // Ambil data faktur beserta detail dari tong sampah
+            $purchase = Purchase::onlyTrashed()->with('details.medicine')->findOrFail($id);
+            
+            // 1. Pulihkan Faktur Pembelian
             $purchase->restore();
 
-            if (class_exists(AuditLog::class)) {
-                AuditLog::record(
+            // 2. Rekonstruksi Batch & Sinkronisasi Stok
+            foreach ($purchase->details as $detail) {
+                // Cek apakah batch dengan obat dan nomor batch yang sama sudah ada
+                $existingBatch = DB::table('product_batches')
+                    ->where('medicine_id', $detail->medicine_id)
+                    ->where('batch_number', $detail->batch_number)
+                    ->first();
+
+                if ($existingBatch) {
+                    // Jika batch sudah ada, tambahkan kembali kuantitas stoknya
+                    DB::table('product_batches')
+                        ->where('id', $existingBatch->id)
+                        ->update([
+                            'stock_quantity' => $existingBatch->stock_quantity + $detail->quantity,
+                            'updated_at'     => now(),
+                        ]);
+                } else {
+                    // Jika batch tidak ada, buat baru (tanpa supplier_id yang tidak ada di tabel product_batches)
+                    DB::table('product_batches')->insert([
+                        'medicine_id'    => $detail->medicine_id,
+                        'batch_number'   => $detail->batch_number,
+                        'expired_date'   => $detail->expired_date,
+                        'stock_quantity' => $detail->quantity,
+                        'purchase_price' => $detail->purchase_price ?? $detail->price ?? 0,
+                        'created_at'     => now(),
+                        'updated_at'     => now(),
+                    ]);
+                }
+
+                // 3. Sinkronisasi total stok pada tabel master obat agar muncul kembali di POS & Monitoring
+                \App\Services\InventoryService::syncMedicineStock($detail->medicine_id);
+            }
+
+            if (class_exists(\App\Models\AuditLog::class)) {
+                \App\Models\AuditLog::record(
                     'pembelian', 
                     'RESTORE', 
-                    "Memulihkan arsip faktur pembelian PBF No: {$purchase->invoice_number} dari tong sampah (Tanpa mutasi stok otomatis)."
+                    "Memulihkan arsip faktur pembelian PBF No: {$purchase->invoice_number} dan merekonstruksi batch stok obat."
                 );
             }
 
             DB::commit();
             return redirect()->route('purchases.trash')
-                ->with('success', "Arsip faktur pembelian {$purchase->invoice_number} berhasil dipulihkan.");
+                ->with('success', "Faktur {$purchase->invoice_number} berhasil dipulihkan dan seluruh stok batch obat telah kembali ke POS!");
 
         } catch (\Exception $e) {
             DB::rollBack();
