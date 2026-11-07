@@ -5,9 +5,10 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+
 class ProductBatch extends Model
 {
-    use HasFactory;
+    use HasFactory; 
 
     protected $guarded = ['id'];
 
@@ -23,6 +24,6 @@ class ProductBatch extends Model
 
     public function medicine()
     {
-        return $this->belongsTo(Medicine::class, 'medicine_id')->withTrashed();
+        return $this->belongsTo(Medicine::class, 'medicine_id');
     }
 }
