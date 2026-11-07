@@ -3,13 +3,13 @@ import { Head, Link, usePage, router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 
 export default function Index({ purchases }) {
-    const { flash } = usePage().props;
+    const { flash, errors } = usePage().props;
     const [confirmingDeletion, setConfirmingDeletion] = useState(false);
     const [selectedPurchase, setSelectedPurchase] = useState(null);
     const [printModalOpen, setPrintModalOpen] = useState(false);
     const [activePurchaseToPrint, setActivePurchaseToPrint] = useState(null);
 
-    // STATE BARU: Modal Rincian Detail Item Pembelian
+    // STATE: Modal Rincian Detail Item Pembelian
     const [detailModalOpen, setDetailModalOpen] = useState(false);
     const [activePurchaseForDetail, setActivePurchaseForDetail] = useState(null);
 
@@ -17,16 +17,19 @@ export default function Index({ purchases }) {
     const [selectedIds, setSelectedIds] = useState([]);
     const [confirmingBulkDeletion, setConfirmingBulkDeletion] = useState(false);
 
+    // STATE: Modal Error Otorisasi (403)
+    const [authErrorModal, setAuthErrorModal] = useState(false);
+
     useEffect(() => {
-        if (flash?.print_url) {
+        if (errors?.authorization || errors?.error) {
+            setAuthErrorModal(true);
         }
-    }, [flash]);
+    }, [errors]);
 
     const formatRupiah = (number) => {
         return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number || 0);
     };
 
-    // Fungsi Pilih Semua Checkbox
     const handleSelectAll = (e) => {
         if (e.target.checked) {
             setSelectedIds(purchases.map(p => p.id));
@@ -35,7 +38,6 @@ export default function Index({ purchases }) {
         }
     };
 
-    // Fungsi Pilih Satuan Checkbox
     const handleSelectOne = (id) => {
         if (selectedIds.includes(id)) {
             setSelectedIds(selectedIds.filter(item => item !== id));
@@ -51,16 +53,19 @@ export default function Index({ purchases }) {
 
     const deletePurchase = () => {
         if (selectedPurchase) {
+            setConfirmingDeletion(false); 
+
             router.delete(route('purchases.destroy', selectedPurchase.id), {
                 onSuccess: () => {
-                    setConfirmingDeletion(false);
                     setSelectedPurchase(null);
                 },
+                onError: () => {
+                    setSelectedPurchase(null);
+                }
             });
         }
     };
 
-    // Fungsi Hapus Massal (Bulk Delete)
     const deleteBulkPurchases = () => {
         router.post(route('purchases.bulk-destroy'), { ids: selectedIds }, {
             onSuccess: () => {
@@ -93,7 +98,6 @@ export default function Index({ purchases }) {
         <AuthenticatedLayout header="Pembelian & Barang Masuk">
             <Head title="Data Pembelian" />
 
-            {/* HEADER & KELOMPOK TOMBOL AKSI */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 <div>
                     <h3 className="text-xl font-extrabold text-gray-800 dark:text-gray-100">Riwayat Faktur Pembelian</h3>
@@ -101,7 +105,6 @@ export default function Index({ purchases }) {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    {/* Tombol Hapus Massal */}
                     {selectedIds.length > 0 && (
                         <button 
                             onClick={() => setConfirmingBulkDeletion(true)}
@@ -196,7 +199,6 @@ export default function Index({ purchases }) {
                                     </td>
                                     <td className="px-6 py-5 text-center">
                                         <div className="flex items-center justify-center gap-2">
-                                            {/* TOMBOL LIHAT DETAIL ITEM OBAT */}
                                             <button 
                                                 onClick={() => handleOpenDetailModal(purchase)} 
                                                 title="Lihat Detail Item Obat"
@@ -205,7 +207,6 @@ export default function Index({ purchases }) {
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                             </button>
 
-                                            {/* TOMBOL CETAK BPB / PDF */}
                                             <button 
                                                 onClick={() => handleOpenPrintModal(purchase)} 
                                                 title="Cetak BPB"
@@ -214,7 +215,6 @@ export default function Index({ purchases }) {
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                                             </button>
 
-                                            {/* TOMBOL HAPUS */}
                                             <button 
                                                 onClick={() => confirmDelete(purchase)}
                                                 title="Hapus Faktur"
@@ -231,7 +231,43 @@ export default function Index({ purchases }) {
                 </table>
             </div>
 
-            {/* MODAL POP-UP RINCIAN ITEM OBAT FAKTUR */}
+            {/* MODAL PERINGATAN AKSES DITOLAK (403) */}
+            {authErrorModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 p-4">
+                    <div className="bg-white dark:bg-[#1E272E] rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-100 dark:border-gray-800 text-center relative">
+                        
+                        <button 
+                            onClick={() => setAuthErrorModal(false)}
+                            className="absolute top-4 right-4 p-2 bg-gray-100 dark:bg-gray-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-xl transition-colors cursor-pointer"
+                            title="Tutup"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+
+                        <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg className="w-8 h-8" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                            </svg>
+                        </div>
+
+                        <h3 className="text-lg font-extrabold text-gray-800 dark:text-gray-100 mb-2">Akses Ditolak (403)</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                            {errors?.authorization || errors?.error || 'Hanya Owner atau Superadmin yang memiliki hak akses untuk mengubah data faktur pembelian.'}
+                        </p>
+
+                        <button 
+                            onClick={() => setAuthErrorModal(false)}
+                            className="w-full py-3 bg-[#48CFA4] hover:bg-[#3AB890] text-white rounded-2xl font-bold text-sm shadow-lg shadow-[#48CFA4]/20 transition-all cursor-pointer"
+                        >
+                            Tutup / Mengerti
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL LAINNYA (Detail, Konfirmasi Hapus, Pratinjau Cetak) TETAP UTUH */}
             {detailModalOpen && activePurchaseForDetail && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 p-4">
                     <div className="bg-white dark:bg-[#1E272E] rounded-3xl max-w-2xl w-full p-6 space-y-4 shadow-2xl border border-gray-100 dark:border-gray-800">
@@ -253,7 +289,6 @@ export default function Index({ purchases }) {
                             </button>
                         </div>
 
-                        {/* TABEL ITEM OBAT */}
                         <div className="max-h-64 overflow-y-auto">
                             <table className="w-full text-left text-xs border-collapse">
                                 <thead>
@@ -301,7 +336,6 @@ export default function Index({ purchases }) {
                 </div>
             )}
 
-            {/* MODAL KONFIRMASI HAPUS SATUAN */}
             {confirmingDeletion && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-[#1E272E] p-8 rounded-3xl shadow-2xl max-w-md w-full mx-4 border border-gray-100 dark:border-gray-800 text-center">
@@ -333,7 +367,6 @@ export default function Index({ purchases }) {
                 </div>
             )}
 
-            {/* MODAL KONFIRMASI HAPUS MASSAL (BULK DELETE) */}
             {confirmingBulkDeletion && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-[#1E272E] p-8 rounded-3xl shadow-2xl max-w-md w-full mx-4 border border-gray-100 dark:border-gray-800 text-center">
@@ -365,11 +398,9 @@ export default function Index({ purchases }) {
                 </div>
             )}
 
-            {/* MODAL PRATINJAU & CETAK DOKUMEN */}
             {printModalOpen && activePurchaseToPrint && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 p-4 overflow-y-auto">
                     <div className="bg-white dark:bg-[#1E272E] p-6 md:p-7 rounded-3xl shadow-2xl max-w-4xl w-full border border-gray-100 dark:border-gray-800 flex flex-col my-auto">
-                        
                         <div className="flex justify-between items-center pb-4 mb-3 border-b border-gray-100 dark:border-gray-800">
                             <div>
                                 <span className="px-3 py-1 bg-[#EAF5F0] dark:bg-[#253939] text-[#246A55] dark:text-[#67E2B4] rounded-full text-[10px] font-extrabold uppercase tracking-wider">
