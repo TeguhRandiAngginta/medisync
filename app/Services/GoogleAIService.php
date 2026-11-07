@@ -8,47 +8,75 @@ use Illuminate\Support\Facades\Log;
 class GoogleAIService
 {
     /**
-     * 
-     * 
-     * @param string $prompt
-     * @param string|null $base64Image
-     * @param string|null $mimeType
-     * @param string|null $model (Opsional: 'gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-2.5-pro', dll.)
-     * @return array
+     * Mengirim konten ke Google AI Studio dengan sistem Automatic Fallback kilat.
      */
     public static function generateContent(string $prompt, ?string $base64Image = null, ?string $mimeType = null, ?string $model = null): array
     {
         $apiKey = config('services.google_ai.api_key');
-        $targetModel =$model ?? config('services.google_ai.default_model', 'gemini-2.5-flash');
 
         if (empty($apiKey)) {
             throw new \Exception('GEMINI_API_KEY belum dikonfigurasi pada file .env');
         }
 
-        $parts = [['text' =>$prompt]];
+        // Gunakan nama model resmi yang valid dan didukung oleh Google AI Studio API
+        $fallbackModels = $model ? [$model] : [
+            'gemini-1.5-flash', // Model paling stabil, cepat, dan akurat untuk OCR gambar
+            'gemini-1.5-pro',   // Cadangan tingkat lanjut
+            'gemini-2.0-flash'  // Cadangan alternatif terbaru jika ada
+        ];
 
-        $response = Http::timeout(60)
-            ->withHeaders(['Content-Type' => 'application/json'])
-            ->post($endpoint, [
-                'contents' => [
-                    [
-                        'parts' => $parts
-                    ]
-                ],
-                'generationConfig' => [
-                    'responseMimeType' => 'application/json'
+        $parts = [];
+        if (!empty($base64Image) && !empty($mimeType)) {
+            $parts[] = [
+                'inline_data' => [
+                    'mime_type' => $mimeType,
+                    'data'      => $base64Image
                 ]
-            ]);
+            ];
+        }
+        $parts[] = ['text' => $prompt];
 
-        if ($response->failed()) {
-            Log::error("Google AI Studio ({$targetModel}) Error: " . $response->body());
-            throw new \Exception("Gagal menghubungi Google AI Studio API [Model: {$targetModel}].");
+        $lastException = null;
+
+        foreach ($fallbackModels as $targetModel) {
+            $endpoint = "https://generativelanguage.googleapis.com/v1beta/models/{$targetModel}:generateContent?key=" . $apiKey;
+
+            try {
+                $response = Http::timeout(15)
+                    ->withHeaders(['Content-Type' => 'application/json'])
+                    ->post($endpoint, [
+                        'contents' => [
+                            [
+                                'parts' => $parts
+                            ]
+                        ],
+                        'generationConfig' => [
+                            'responseMimeType' => 'application/json'
+                        ]
+                    ]);
+
+                // Jika sukses (2xx), langsung kembalikan hasil
+                if ($response->successful()) {
+                    $responseData = $response->json();
+                    $jsonText = $responseData['candidates'][0]['content']['parts'][0]['text'] ?? '{}';
+                    
+                    return json_decode($jsonText, true) ?? ['raw_text' => $jsonText];
+                }
+
+                Log::warning("Model [{$targetModel}] merespons status {$response->status()}. Berpindah ke model cadangan...");
+                $lastException = new \Exception("Model {$targetModel} error: " . $response->body());
+
+            } catch (\Exception $e) {
+                Log::warning("Koneksi ke model [{$targetModel}] gagal/timeout. Berpindah...");
+                $lastException = $e;
+            }
         }
 
-        $responseData = $response->json();
+        throw new \Exception("Semua model Gemini gagal merespons. Error: " . ($lastException ? $lastException->getMessage() : 'Unknown error'));
+    }
 
-        $jsonText = $responseData['candidates'][0]['content']['parts'][0]['text'] ?? '{}';
-
-        return json_decode($jsonText, true) ?? ['raw_text' => $jsonText];
+    public static function analyzePrescriptionImage(string $base64Image, string $mimeType, string $prompt): array
+    {
+        return self::generateContent($prompt, $base64Image, $mimeType);
     }
 }

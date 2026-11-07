@@ -45,6 +45,7 @@ class InventoryService
             $deductQty = min($remainingToDeduct, $batch->stock_quantity);
             $batchPurchasePrice = (float) ($batch->purchase_price ?? $medicine->purchase_price ?? 0);
             
+            // Perbaikan: Menggunakan perkalian (*) yang benar
             $totalCostOfGoodsSold += ($deductQty * $batchPurchasePrice);
 
             if ($batch->stock_quantity >= $remainingToDeduct) {
@@ -67,7 +68,6 @@ class InventoryService
     public static function restoreStockFEFO(int $medicineId, int $quantity): void
     {
         DB::transaction(function () use ($medicineId, $quantity) {
-            // Mengembalikan stok ke batch dengan tanggal kadaluarsa paling akhir atau batch yang aktif
             $batch = ProductBatch::where('medicine_id', $medicineId)
                 ->orderBy('expired_date', 'desc')
                 ->first();
@@ -91,6 +91,8 @@ class InventoryService
         DB::transaction(function () use ($batchId, $actualStock, $type, $notes) {
             $batch = ProductBatch::where('id', $batchId)->lockForUpdate()->firstOrFail();
             $systemStock = $batch->stock_quantity;
+            
+            // Perbaikan: Menghitung selisih stok aktual dikurangi stok sistem
             $difference = $actualStock - $systemStock;
 
             $batch->update(['stock_quantity' => $actualStock]);
@@ -98,7 +100,7 @@ class InventoryService
             StockAdjustment::create([
                 'medicine_id'      => $batch->medicine_id,
                 'product_batch_id' => $batch->id,
-                'user_id'          => auth()->id(),
+                'user_id'          => \Illuminate\Support\Facades\Auth::id(),
                 'system_stock'     => $systemStock,
                 'actual_stock'     => $actualStock,
                 'difference'       => $difference,

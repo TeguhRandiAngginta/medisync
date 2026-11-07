@@ -1,9 +1,9 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
-import PrescriptionFormHeader from '@/Components/Prescription/PrescriptionFormHeader';
-import PrescriptionItemManager from '@/Components/Prescription/PrescriptionItemManager';
-import CustomAlertModal from '@/Components/Prescription/CustomAlertModal';
+import PrescriptionFormHeader from '@/Pages/Prescription/Components/PrescriptionFormHeader';
+import PrescriptionItemManager from '@/Pages/Prescription/Components/PrescriptionItemManager';
+import CustomAlertModal from '@/Pages/Prescription/Components/CustomAlertModal';
 
 export default function Create({ medicines }) {
     const { data, setData, post, processing, errors } = useForm({
@@ -41,7 +41,6 @@ export default function Create({ medicines }) {
         setData('doctor_name', formatDoctorName(e.target.value));
     };
 
-    // MURNI PILIH FILE & PREVIEW (TIDAK MEMANGGIL AI)
     const handleImageUpload = (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -50,7 +49,6 @@ export default function Create({ medicines }) {
         setPreviewUrl(URL.createObjectURL(file));
     };
 
-    // PROSES AI BERJALAN HANYA KETIKA TOMBOL "EKSTRAK AI" DIKLIK MANUSIA
     const handleScanAI = async (e) => {
         if (e) e.preventDefault(); 
         
@@ -95,10 +93,13 @@ export default function Create({ medicines }) {
                     throw new Error("Kunci VITE_GEMINI_API_KEY belum dipasang di file .env!");
                 }
 
-                const prompt = `Anda adalah sistem OCR apotek. Analisis gambar resep dokter ini. Daftar obat yang ada di database apotek kami: ${JSON.stringify(medicines.map(m => m.name))}.
-                Tugas:
-                1. Ekstrak patient_name, doctor_name (format 'dr. Nama'), prescription_date (YYYY-MM-DD).
-                2. Ekstrak items [{name, quantity, signa}].
+                const prompt = `Anda adalah sistem OCR apotek. Analisis resep dokter terlampir. 
+                Daftar HANYA nama obat utama yang ada di stok kami (Abaikan dosis/mg): ${JSON.stringify(medicines.map(m => m.name.split(' ')[0]))}.
+                
+                Tugas Anda:
+                1. Ekstrak patient_name, doctor_name, prescription_date.
+                2. Ekstrak daftar obat ke format JSON: [{name, quantity, signa}]. 
+                PENTING: Di field "name", berikan HANYA nama kandungan aktif/merk utama (misal: "Paracetamol", BUKAN "Parasetamol tab 500 mg").
                 KEMBALIKAN HANYA FORMAT JSON MENTAH TANPA MARKDOWN.`;
 
                 let parsedData = null;
@@ -198,10 +199,15 @@ export default function Create({ medicines }) {
 
         if (parsedData.items && parsedData.items.length > 0) {
             parsedData.items.forEach(aiItem => {
-                const readName = (aiItem.name || aiItem.medicine_name || '').toLowerCase();
-                const matchedMed = medicines.find(m => 
-                    m.name.toLowerCase().includes(readName) || readName.includes(m.name.toLowerCase())
-                );
+                const rawName = (aiItem.name || aiItem.medicine_name || '').trim();
+                const firstWordMatch = rawName.split(' ')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+                
+                const matchedMed = medicines.find(m => {
+                    const mNameWord = m.name.split(' ')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+                    return mNameWord === firstWordMatch || 
+                            mNameWord.includes(firstWordMatch) || 
+                            firstWordMatch.includes(mNameWord);
+                });
 
                 if (matchedMed) {
                     autoItems.push({
@@ -209,22 +215,33 @@ export default function Create({ medicines }) {
                         name: matchedMed.name,
                         sku: matchedMed.sku,
                         stock: matchedMed.stock,
-                        quantity: aiItem.quantity || 1,
+                        quantity: parseInt(aiItem.quantity) || 1,
                         signa: aiItem.signa || '3 x 1 Tablet Sesudah Makan'
                     });
-                } else if (readName) {
-                    notFoundItems.push(`${aiItem.name || aiItem.medicine_name} (Qty: ${aiItem.quantity || 1}, Signa: ${aiItem.signa || '-'})`);
+                } else if (rawName) {
+                    notFoundItems.push(`${rawName} (Qty: ${aiItem.quantity || 1}, Signa: ${aiItem.signa || '-'})`);
                 }
             });
         }
 
-        setUnmatchedMedicines(notFoundItems);
+        setUnmatchedMedicines([...notFoundItems]); // Pastikan array baru untuk trigger re-render
+
+        let warningText = '';
+        if (notFoundItems.length > 0) {
+            warningText = "PERINGATAN SISTEM (Obat Resep Tidak Terdaftar di Stok):\n- " + notFoundItems.join("\n- ");
+        }
+
+        const existingNotes = parsedData.notes || data.notes || '';
+        const finalNotes = warningText 
+            ? (existingNotes ? existingNotes + "\n\n" + warningText : warningText)
+            : existingNotes;
 
         setData(prev => ({
             ...prev,
             patient_name: parsedData.patient_name || prev.patient_name,
             doctor_name: parsedData.doctor_name ? formatDoctorName(parsedData.doctor_name) : prev.doctor_name,
             prescription_date: parsedData.prescription_date || prev.prescription_date,
+            notes: finalNotes,
             items: autoItems.length > 0 ? autoItems : prev.items
         }));
     };
@@ -311,7 +328,7 @@ export default function Create({ medicines }) {
                             <textarea 
                                 className="w-full bg-gray-50 dark:bg-[#151E24] border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2 text-sm text-gray-800 dark:text-gray-200" 
                                 rows="3" 
-                                value={data.notes} 
+                                value={data.notes || ''} 
                                 onChange={e => setData('notes', e.target.value)}
                                 placeholder="Tulis instruksi tambahan resep di sini..."
                             ></textarea>

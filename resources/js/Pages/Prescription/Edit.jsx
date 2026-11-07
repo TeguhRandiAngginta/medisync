@@ -1,8 +1,8 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { useState } from 'react';
-import PrescriptionItemManager from '@/Components/Prescription/PrescriptionItemManager';
-import CustomAlertModal from '@/Components/Prescription/CustomAlertModal';
+import PrescriptionItemManager from '@/Pages/Prescription/Components/PrescriptionItemManager';
+import CustomAlertModal from '@/Pages/Prescription/Components/CustomAlertModal';
 
 export default function Edit({ prescription, medicines }) {
     const { data, setData, put, processing, errors } = useForm({

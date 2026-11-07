@@ -9,7 +9,6 @@ use App\Services\InventoryService;
 use App\Services\GoogleAIService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
@@ -114,30 +113,83 @@ class PrescriptionController extends Controller
             $base64Image = base64_encode(file_get_contents($file->getPathname()));
             $mimeType = $file->getClientMimeType();
 
-            $allMedicines = Medicine::where('is_active', true)->select('id', 'name')->get()->toArray();
-            $medicineListJson = json_encode($allMedicines);
+            // Prompt instruksi yang jelas agar AI mengekstrak semua baris obat secara teks mentah
+            $prompt = "Analisis gambar resep dokter ini secara teliti. Ekstrak seluruh daftar obat yang tertulis ke dalam format JSON murni dengan struktur persis seperti ini:
+            {
+                \"patient_name\": \"Nama pasien jika ada, atau string kosong\",
+                \"doctor_name\": \"Nama dokter jika ada, atau string kosong\",
+                \"prescription_date\": \"Format YYYY-MM-DD jika ada, atau tanggal hari ini\",
+                \"notes\": \"Catatan tambahan jika ada\",
+                \"items\": [
+                    {
+                        \"medicine_name\": \"Nama obat tertulis (contoh: Paracetamol, CTM, Amoxicillin)\",
+                        \"quantity\": 15,
+                        \"signa\": \"Aturan pakai yang tertulis (contoh: 3 x 1)\"
+                    }
+                ]
+            }";
 
-            $prompt = "Anda adalah sistem OCR apotek cerdas. Analisis gambar resep dokter ini. " .
-                    "Daftar obat yang tersedia di database apotek kami: {$medicineListJson}. \n" .
-                    "Ekstrak informasi berikut dan kembalikan HANYA format JSON murni tanpa markdown: \n" .
-                    "{\n" .
-                    "  \"patient_name\": \"Nama Pasien\",\n" .
-                    "  \"doctor_name\": \"dr. Nama Dokter\",\n" .
-                    "  \"prescription_date\": \"YYYY-MM-DD\",\n" .
-                    "  \"items\": [\n" .
-                    "    {\"medicine_id\": 1, \"name\": \"Nama Obat\", \"quantity\": 10, \"signa\": \"3x1 sesudah makan\"}\n" .
-                    "  ]\n" .
-                    "}";
+            // Panggil GoogleAIService dengan sistem fallback multi-model
+            $aiResult = GoogleAIService::generateContent($prompt, $base64Image, $mimeType);
 
-            // Menggunakan GoogleAIService (bisa passing nama model apa saja di parameter ke-4)
-            // Contoh: 'gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-2.5-pro'
-            $parsedData = GoogleAIService::generateContent($prompt, $base64Image, $mimeType, 'gemini-2.5-flash');
+            $extractedItems = $aiResult['items'] ?? [];
+            $matchedItems = [];
+            $notFoundMedicines = [];
 
-            return response()->json($parsedData);
+            foreach ($extractedItems as $item) {
+                // Ambil nama obat dari berbagai kemungkinan key yang dikembalikan AI
+                $queryName = $item['medicine_name'] ?? ($item['name'] ?? '');
+                if (empty($queryName)) continue;
+
+                // Cari obat di database lokal berdasarkan kemiripan nama (Case-insensitive)
+                $medicine = Medicine::where('is_active', true)
+                    ->where(function($q) use ($queryName) {
+                        $q->where('name', 'ilike', "%{$queryName}%")
+                          ->orWhere('sku', 'ilike', "%{$queryName}%");
+                    })
+                    ->first();
+
+                if ($medicine) {
+                    // Jika obat ditemukan di database, masukkan ke daftar pilihan form
+                    $matchedItems[] = [
+                        'medicine_id' => $medicine->id,
+                        'name'        => $medicine->name,
+                        'quantity'    => (int) ($item['quantity'] ?? 1),
+                        $item['signa'] ?? '3 x 1',
+                    ];
+                } else {
+                    // Jika obat TIDAK terdaftar di database, cari alternatif terdekat sebagai saran
+                    $searchKeyword = substr(trim($queryName), 0, 3);
+                    $alternative = Medicine::where('is_active', true)
+                        ->where('name', 'ilike', "%{$searchKeyword}%")
+                        ->first();
+                        
+                    $altText = $alternative ? " (Saran Alternatif di Stok: {$alternative->name})" : " (Tidak ada alternatif yang mirip di inventaris)";
+                    
+                    // Catat ke dalam daftar obat hilang
+                    $notFoundMedicines[] = "- {$queryName} (Diminta Qty: " . ($item['quantity'] ?? 1) . ", Signa: " . ($item['signa'] ?? '-') . "){$altText}";
+                }
+            }
+
+            // Susun Catatan Tambahan (Warning) secara otomatis jika ada obat resep yang tidak terdaftar
+            $notes = $aiResult['notes'] ?? '';
+            if (!empty($notFoundMedicines)) {
+                $warningNote = "⚠️ PERINGATAN SISTEM (Stok Tidak Terdaftar):\n" . implode("\n", $notFoundMedicines);
+                $notes = trim($notes . "\n\n" . $warningNote);
+            }
+
+            return response()->json([
+                'success'           => true,
+                'patient_name'      => $aiResult['patient_name'] ?? '',
+                'doctor_name'       => $aiResult['doctor_name'] ?? '',
+                'prescription_date' => $aiResult['prescription_date'] ?? date('Y-m-d'),
+                'items'             => $matchedItems,
+                'notes'             => $notes,
+            ]);
 
         } catch (\Throwable $e) {
             Log::error('Prescription OCR Error: ' . $e->getMessage());
-            return response()->json(['message' => $e->getMessage()], 500);
+            return response()->json(['message' => 'Gagal memproses gambar dengan AI: ' . $e->getMessage()], 500);
         }
     }
 
