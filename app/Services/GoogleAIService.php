@@ -27,16 +27,6 @@ class GoogleAIService
 
         $parts = [['text' =>$prompt]];
 
-        if ($base64Image && $mimeType) {$parts[] = [
-                'inline_data' => [
-                    'mime_type' => $mimeType,
-                    'data'      => $base64Image
-                ]
-            ];
-        }
-
-        $endpoint = "https://generativelanguage.googleapis.com/v1beta/models/{$targetModel}:generateContent?key={$apiKey}";
-
         $response = Http::timeout(60)
             ->withHeaders(['Content-Type' => 'application/json'])
             ->post($endpoint, [
@@ -44,6 +34,9 @@ class GoogleAIService
                     [
                         'parts' => $parts
                     ]
+                ],
+                'generationConfig' => [
+                    'responseMimeType' => 'application/json'
                 ]
             ]);
 
@@ -52,11 +45,10 @@ class GoogleAIService
             throw new \Exception("Gagal menghubungi Google AI Studio API [Model: {$targetModel}].");
         }
 
-        $responseData =$response->json();
-        $textRaw =$responseData['candidates'][0]['content']['parts'][0]['text'] ?? '{}';
+        $responseData = $response->json();
 
-        $textClean = preg_replace('/^```(?:json)?\s*|\s*```$/i', '', trim($textRaw));
+        $jsonText = $responseData['candidates'][0]['content']['parts'][0]['text'] ?? '{}';
 
-        return json_decode($textClean, true) ?? ['raw_text' => $textClean];
+        return json_decode($jsonText, true) ?? ['raw_text' => $jsonText];
     }
 }
