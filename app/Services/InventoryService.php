@@ -10,10 +10,6 @@ use Exception;
 
 class InventoryService
 {
-    /**
-     * Memotong stok obat berdasarkan prinsip FEFO (First Expired, First Out),
-     * menyinkronkan total stok obat di tabel `medicines`, dan mengembalikan HPP rata-rata unit.
-     */
     public static function deductStockFEFO(int $medicineId, int $requestedQty): float
     {
         $medicine = Medicine::where('id', $medicineId)->lockForUpdate()->first();
@@ -45,7 +41,6 @@ class InventoryService
             $deductQty = min($remainingToDeduct, $batch->stock_quantity);
             $batchPurchasePrice = (float) ($batch->purchase_price ?? $medicine->purchase_price ?? 0);
             
-            // Perbaikan: Menggunakan perkalian (*) yang benar
             $totalCostOfGoodsSold += ($deductQty * $batchPurchasePrice);
 
             if ($batch->stock_quantity >= $remainingToDeduct) {
@@ -62,9 +57,6 @@ class InventoryService
         return $requestedQty > 0 ? ($totalCostOfGoodsSold / $requestedQty) : 0.0;
     }
 
-    /**
-     * Mengembalikan stok ke batch saat transaksi penjualan dibatalkan / dihapus.
-     */
     public static function restoreStockFEFO(int $medicineId, int $quantity): void
     {
         DB::transaction(function () use ($medicineId, $quantity) {
@@ -92,7 +84,6 @@ class InventoryService
             $batch = ProductBatch::where('id', $batchId)->lockForUpdate()->firstOrFail();
             $systemStock = $batch->stock_quantity;
             
-            // Perbaikan: Menghitung selisih stok aktual dikurangi stok sistem
             $difference = $actualStock - $systemStock;
 
             $batch->update(['stock_quantity' => $actualStock]);

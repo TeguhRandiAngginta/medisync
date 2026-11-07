@@ -33,6 +33,11 @@ export default function Index({ medicines }) {
     const formatRupiah = (number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number || 0);
 
     useEffect(() => {
+        if (!searchQuery.trim()) {
+            setDbMedicines(medicines || []);
+            return;
+        }
+
         const timer = setTimeout(async () => {
             try {
                 const res = await axios.get('/api/pos/medicines', { params: { q: searchQuery } });
@@ -43,7 +48,7 @@ export default function Index({ medicines }) {
         }, 300); // 300ms debounce
 
         return () => clearTimeout(timer);
-    }, [searchQuery]);
+    }, [searchQuery, medicines]);
 
     const filteredMedicines = dbMedicines;
 

@@ -1,5 +1,7 @@
 <?php
 
+namespace App\Controllers; 
+
 namespace App\Http\Controllers;
 
 use App\Models\Medicine;
@@ -18,10 +20,6 @@ class PosController extends Controller
         $today = now()->toDateString();
 
         $medicines = Medicine::where('is_active', true)
-            ->whereHas('batches', function ($query) use ($today) {
-                $query->where('stock_quantity', '>', 0)
-                    ->where('expired_date', '>=', $today);
-            })
             ->withSum(['batches as real_stock' => function ($query) use ($today) {
                 $query->where('stock_quantity', '>', 0)
                     ->where('expired_date', '>=', $today);
@@ -31,7 +29,6 @@ class PosController extends Controller
                 $medicine->stock = (int) ($medicine->real_stock ?? 0);
                 return $medicine;
             })
-            ->filter(fn($m) => $m->stock > 0)
             ->values();
 
         return Inertia::render('Pos/Index', [
@@ -52,9 +49,6 @@ class PosController extends Controller
                         ->orWhere('barcode', $query);
                 });
             })
-            ->whereHas('batches', function ($q) use ($today) {
-                $q->where('stock_quantity', '>', 0)->where('expired_date', '>=', $today);
-            })
             ->withSum(['batches as real_stock' => function ($q) use ($today) {
                 $q->where('stock_quantity', '>', 0)->where('expired_date', '>=', $today);
             }], 'stock_quantity')
@@ -64,7 +58,6 @@ class PosController extends Controller
                 $medicine->stock = (int) ($medicine->real_stock ?? 0);
                 return $medicine;
             })
-            ->filter(fn($m) => $m->stock > 0)
             ->values();
 
         return response()->json($medicines);
