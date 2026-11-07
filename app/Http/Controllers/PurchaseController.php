@@ -121,21 +121,19 @@ class PurchaseController extends Controller
             $invoiceNumber = $purchase->invoice_number;
             
             foreach ($purchase->details as $detail) {
-                // Hapus batch obat agar stok POS berkurang
+                // Soft delete batch obat agar hilang dari POS & Monitoring FEFO sementara
                 ProductBatch::where('purchase_detail_id', $detail->id)->delete();
-
-                // Hitung ulang stok POS
                 InventoryService::syncMedicineStock($detail->medicine_id);
             }
 
-            // Hapus faktur (soft delete)
+            // Soft delete faktur utama (masuk ke Keranjang Sampah / Trash)
             $purchase->delete();
 
             if (class_exists(AuditLog::class)) {
                 AuditLog::record(
                     'pembelian', 
                     'DELETE', 
-                    "Menghapus faktur pembelian PBF No: {$invoiceNumber} senilai Rp " . number_format($purchase->total_amount, 0, ',', '.')
+                    "Memindahkan faktur pembelian PBF No: {$invoiceNumber} ke keranjang sampah."
                 );
             }
 
@@ -160,21 +158,31 @@ class PurchaseController extends Controller
         DB::beginTransaction();
         try {
             $purchases = Purchase::with('details')->whereIn('id', $validated['ids'])->get();
+            $affectedMedicineIds = [];
 
             foreach ($purchases as $purchase) {
                 foreach ($purchase->details as $detail) {
+                    $affectedMedicineIds[] = $detail->medicine_id;
+                    // Soft delete batch terkait agar hilang dari POS & Monitoring FEFO sementara
                     ProductBatch::where('purchase_detail_id', $detail->id)->delete();
-                    InventoryService::syncMedicineStock($detail->medicine_id);
                 }
+                
+                // Soft delete faktur (masuk ke Trash)
                 $purchase->delete();
             }
 
-            if (class_exists(AuditLog::class)) {
-                AuditLog::record('pembelian', 'BULK_DELETE', 'Menghapus massal ' . count($purchases) . ' faktur pembelian.');
+            $uniqueMedicineIds = array_unique($affectedMedicineIds);
+            foreach ($uniqueMedicineIds as $medicineId) {
+                InventoryService::syncMedicineStock($medicineId);
+            }
+
+            if (class_exists(\App\Models\AuditLog::class)) {
+                \App\Models\AuditLog::record('pembelian', 'BULK_DELETE', 'Memindahkan ' . count($purchases) . ' faktur pembelian ke keranjang sampah.');
             }
 
             DB::commit();
-            return redirect()->route('purchases.index')->with('success', count($purchases) . ' faktur pembelian berhasil dipindahkan ke tong sampah.');
+            return redirect()->route('purchases.index')->with('success', count($purchases) . ' faktur pembelian berhasil dipindahkan ke keranjang sampah.');
+            
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['message' => 'Gagal menghapus massal: ' . $e->getMessage()]);
@@ -185,56 +193,38 @@ class PurchaseController extends Controller
     {
         DB::beginTransaction();
         try {
-            // Ambil data faktur beserta detail dari tong sampah
-            $purchase = Purchase::onlyTrashed()->with('details.medicine')->findOrFail($id);
+            $purchase = Purchase::onlyTrashed()->with('details')->findOrFail($id);
             
-            // 1. Pulihkan Faktur Pembelian
+            // Pulihkan faktur dari Trash
             $purchase->restore();
 
-            // 2. Rekonstruksi Batch & Sinkronisasi Stok
+            $affectedMedicineIds = [];
+
             foreach ($purchase->details as $detail) {
-                // Cek apakah batch dengan obat dan nomor batch yang sama sudah ada
-                $existingBatch = DB::table('product_batches')
-                    ->where('medicine_id', $detail->medicine_id)
-                    ->where('batch_number', $detail->batch_number)
-                    ->first();
+                $affectedMedicineIds[] = $detail->medicine_id;
+                
+                // Pulihkan (Restore) batch obat yang tadinya ikut ter-soft-delete
+                ProductBatch::onlyTrashed()
+                    ->where('purchase_detail_id', $detail->id)
+                    ->restore();
+            }
 
-                if ($existingBatch) {
-                    // Jika batch sudah ada, tambahkan kembali kuantitas stoknya
-                    DB::table('product_batches')
-                        ->where('id', $existingBatch->id)
-                        ->update([
-                            'stock_quantity' => $existingBatch->stock_quantity + $detail->quantity,
-                            'updated_at'     => now(),
-                        ]);
-                } else {
-                    // Jika batch tidak ada, buat baru (tanpa supplier_id yang tidak ada di tabel product_batches)
-                    DB::table('product_batches')->insert([
-                        'medicine_id'    => $detail->medicine_id,
-                        'batch_number'   => $detail->batch_number,
-                        'expired_date'   => $detail->expired_date,
-                        'stock_quantity' => $detail->quantity,
-                        'purchase_price' => $detail->purchase_price ?? $detail->price ?? 0,
-                        'created_at'     => now(),
-                        'updated_at'     => now(),
-                    ]);
-                }
-
-                // 3. Sinkronisasi total stok pada tabel master obat agar muncul kembali di POS & Monitoring
-                \App\Services\InventoryService::syncMedicineStock($detail->medicine_id);
+            $uniqueMedicineIds = array_unique($affectedMedicineIds);
+            foreach ($uniqueMedicineIds as $medicineId) {
+                InventoryService::syncMedicineStock($medicineId);
             }
 
             if (class_exists(\App\Models\AuditLog::class)) {
                 \App\Models\AuditLog::record(
                     'pembelian', 
                     'RESTORE', 
-                    "Memulihkan arsip faktur pembelian PBF No: {$purchase->invoice_number} dan merekonstruksi batch stok obat."
+                    "Memulihkan arsip faktur pembelian PBF No: {$purchase->invoice_number} dan batch stok obatnya dari keranjang sampah."
                 );
             }
 
             DB::commit();
             return redirect()->route('purchases.trash')
-                ->with('success', "Faktur {$purchase->invoice_number} berhasil dipulihkan dan seluruh stok batch obat telah kembali ke POS!");
+                ->with('success', "Faktur {$purchase->invoice_number} berhasil dipulihkan, data POS dan Monitoring FEFO kembali normal!");
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -247,10 +237,13 @@ class PurchaseController extends Controller
         DB::beginTransaction();
         try {
             $purchase = Purchase::onlyTrashed()->with('details')->findOrFail($id);
+            
+            // PERBAIKAN: Menambahkan tanda dolar ($) di depan variabel invoiceNumber
             $invoiceNumber = $purchase->invoice_number;
 
             foreach ($purchase->details as $detail) {
-                ProductBatch::where('purchase_detail_id', $detail->id)->delete();
+                // Hapus permanen batch obat dari database
+                ProductBatch::onlyTrashed()->where('purchase_detail_id', $detail->id)->forceDelete();
                 InventoryService::syncMedicineStock($detail->medicine_id);
             }
 

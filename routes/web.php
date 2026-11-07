@@ -52,6 +52,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('purchases/{id}/force-delete', [PurchaseController::class, 'forceDelete'])->name('purchases.force-delete');
     Route::get('purchases/{purchase}/print', [PurchaseController::class, 'printPdf'])->name('purchases.print');
 
+    Route::post('/purchases/bulk-destroy', [PurchaseController::class, 'bulkDestroy'])->name('purchases.bulk-destroy');
     Route::resource('purchases', PurchaseController::class);
 
     Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
