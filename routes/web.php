@@ -38,7 +38,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/sales/bulk-restore', [SalesHistoryController::class, 'bulkRestore'])->name('sales.bulk-restore');
     
     // Prescriptions & OCR
-    Route::post('/api/prescriptions/analyze', [PrescriptionController::class, 'analyzeImage'])->name('api.prescriptions.analyze');
+    Route::post('/api/prescriptions/analyze', [PrescriptionController::class, 'analyzeImage'])->middleware('throttle:10,1')->name('api.prescriptions.analyze');
     Route::get('/api/prescriptions/{number}', [PrescriptionController::class, 'getForPos'])->name('api.prescriptions.get');
     Route::resource('prescriptions', PrescriptionController::class)->except(['show', 'edit', 'update']);
     Route::get('/prescriptions/{prescription}/edit', [PrescriptionController::class, 'edit'])->name('prescriptions.edit');

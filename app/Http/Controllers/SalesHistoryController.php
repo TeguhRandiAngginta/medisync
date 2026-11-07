@@ -12,24 +12,11 @@ class SalesHistoryController extends Controller
     private function checkOwnerAccess()
     {
         $user = auth()->user();
-        
-        $role = strtolower($user->role ?? '');
 
-        $roleName = '';
-        try {
-            if (method_exists($user, 'roles') && $user->roles) {
-                $roleName = strtolower($user->roles->first()->name ?? '');
-            }
-        } catch (\Throwable $e) {
-        }
+        $roleSlug = $user->role->slug ?? '';
 
-        $isOwnerOrSuper = in_array($role, ['owner', 'pemilik', 'superadmin', 'super-admin']) ||
-                            in_array($roleName, ['owner', 'pemilik', 'superadmin', 'super-admin']) ||
-                            (method_exists($user, 'hasRole') && ($user->hasRole('superadmin') || $user->hasRole('owner') || $user->hasRole('Superadmin'))) ||
-                            ($user->role_id == 1);
-
-        if (!$isOwnerOrSuper) {
-            abort(403, 'Hanya Owner yang memiliki hak akses untuk menghapus atau memulihkan data transaksi.');
+        if (!in_array($roleSlug, ['superadmin', 'owner'])) {
+            abort(403, 'Akses Ditolak: Hanya Owner atau Superadmin yang memiliki hak akses untuk mengubah riwayat transaksi.');
         }
     }
 

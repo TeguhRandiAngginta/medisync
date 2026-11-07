@@ -7,13 +7,13 @@ use App\Models\User;
 
 class SalePolicy
 {
-    public function deleteAny($user): bool
+    public function deleteAny(User $user): bool
     {
-        return true; // Bypass total policy untuk mencegah error 403
+        return in_array($user->role->slug ?? '', ['superadmin', 'owner']);
     }
 
-    public function delete($user, Sale $sale): bool
+    public function delete(User $user, Sale $sale): bool
     {
-        return true; // Bypass total policy
+        return in_array($user->role->slug ?? '', ['superadmin', 'owner']);
     }
 }
