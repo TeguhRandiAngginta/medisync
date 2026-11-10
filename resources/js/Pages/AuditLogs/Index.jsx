@@ -5,7 +5,7 @@ export default function Index({ logs, currentTab }) {
     const tabs = [
         { id: 'akun', label: 'Pengguna & Akun' },
         { id: 'inventaris', label: 'Inventaris' },
-        { id: 'stok', label: 'Pergerakan Stok' },
+        { id: 'stok', label: 'Mutasi Stok' },
         { id: 'pembelian', label: 'Pembelian' },
         { id: 'pos', label: 'POS / Penjualan' },
         { id: 'resep', label: 'Resep Masuk' },

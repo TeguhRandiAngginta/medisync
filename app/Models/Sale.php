@@ -38,5 +38,13 @@ class Sale extends Model
                 }
             }
         });
+
+        static::restored(function ($sale) {
+            foreach ($sale->details as $detail) {
+                if ($detail->medicine_id && $detail->quantity > 0) {
+                    InventoryService::deductStockFEFO($detail->medicine_id, $detail->quantity);
+                }
+            }
+        });
     }
 }

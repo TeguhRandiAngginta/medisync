@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Prescription;
 use App\Models\PrescriptionItem;
 use App\Models\Medicine;
+use App\Models\AuditLog;
 use App\Services\InventoryService;
 use App\Services\GoogleAIService;
 use Illuminate\Http\Request;
@@ -79,6 +80,13 @@ class PrescriptionController extends Controller
                     'signa'           => $item['signa'],
                 ]);
             }
+            if (class_exists(AuditLog::class)) {
+                AuditLog::record(
+                    'resep', 
+                    'CREATE', 
+                    "Mencatat Resep Masuk No: {$prescriptionNumber} untuk pasien {$request->patient_name} dari {$request->doctor_name}."
+                );
+            }
 
             DB::commit();
             return redirect()->route('prescriptions.index')->with('success', 'Resep berhasil dicatat! Stok akan dipotong saat resep ditebus di Kasir.');
@@ -113,7 +121,6 @@ class PrescriptionController extends Controller
             $base64Image = base64_encode(file_get_contents($file->getPathname()));
             $mimeType = $file->getClientMimeType();
 
-            // Prompt instruksi yang jelas agar AI mengekstrak semua baris obat secara teks mentah
             $prompt = "Analisis gambar resep dokter ini secara teliti. Ekstrak seluruh daftar obat yang tertulis ke dalam format JSON murni dengan struktur persis seperti ini:
             {
                 \"patient_name\": \"Nama pasien jika ada, atau string kosong\",
@@ -129,7 +136,6 @@ class PrescriptionController extends Controller
                 ]
             }";
 
-            // Panggil GoogleAIService dengan sistem fallback multi-model
             $aiResult = GoogleAIService::generateContent($prompt, $base64Image, $mimeType);
 
             $extractedItems = $aiResult['items'] ?? [];
@@ -137,20 +143,17 @@ class PrescriptionController extends Controller
             $notFoundMedicines = [];
 
             foreach ($extractedItems as $item) {
-                // Ambil nama obat dari berbagai kemungkinan key yang dikembalikan AI
                 $queryName = $item['medicine_name'] ?? ($item['name'] ?? '');
                 if (empty($queryName)) continue;
 
-                // Cari obat di database lokal berdasarkan kemiripan nama (Case-insensitive)
                 $medicine = Medicine::where('is_active', true)
                     ->where(function($q) use ($queryName) {
                         $q->where('name', 'ilike', "%{$queryName}%")
-                          ->orWhere('sku', 'ilike', "%{$queryName}%");
+                            ->orWhere('sku', 'ilike', "%{$queryName}%");
                     })
                     ->first();
 
                 if ($medicine) {
-                    // Jika obat ditemukan di database, masukkan ke daftar pilihan form
                     $matchedItems[] = [
                         'medicine_id' => $medicine->id,
                         'name'        => $medicine->name,
@@ -158,7 +161,6 @@ class PrescriptionController extends Controller
                         $item['signa'] ?? '3 x 1',
                     ];
                 } else {
-                    // Jika obat TIDAK terdaftar di database, cari alternatif terdekat sebagai saran
                     $searchKeyword = substr(trim($queryName), 0, 3);
                     $alternative = Medicine::where('is_active', true)
                         ->where('name', 'ilike', "%{$searchKeyword}%")
@@ -166,12 +168,10 @@ class PrescriptionController extends Controller
                         
                     $altText = $alternative ? " (Saran Alternatif di Stok: {$alternative->name})" : " (Tidak ada alternatif yang mirip di inventaris)";
                     
-                    // Catat ke dalam daftar obat hilang
                     $notFoundMedicines[] = "- {$queryName} (Diminta Qty: " . ($item['quantity'] ?? 1) . ", Signa: " . ($item['signa'] ?? '-') . "){$altText}";
                 }
             }
 
-            // Susun Catatan Tambahan (Warning) secara otomatis jika ada obat resep yang tidak terdaftar
             $notes = $aiResult['notes'] ?? '';
             if (!empty($notFoundMedicines)) {
                 $warningNote = "⚠️ PERINGATAN SISTEM (Stok Tidak Terdaftar):\n" . implode("\n", $notFoundMedicines);
@@ -195,7 +195,17 @@ class PrescriptionController extends Controller
 
     public function destroy(Prescription $prescription)
     {
+        $prescriptionNumber = $prescription->prescription_number;
         $prescription->delete();
+
+        if (class_exists(AuditLog::class)) {
+            AuditLog::record(
+                'resep', 
+                'DELETE', 
+                "Menghapus/membatalkan resep masuk No: {$prescriptionNumber}."
+            );
+        }
+
         return redirect()->route('prescriptions.index')->with('success', 'Resep berhasil dihapus.');
     }
 
@@ -252,6 +262,14 @@ class PrescriptionController extends Controller
                     'quantity'        => $item['quantity'],
                     'signa'           => $item['signa'],
                 ]);
+            }
+
+            if (class_exists(AuditLog::class)) {
+                AuditLog::record(
+                    'resep', 
+                    'UPDATE', 
+                    "Mengubah rincian resep masuk No: {$prescription->prescription_number} (Pasien: {$request->patient_name}, Dokter: {$request->doctor_name})."
+                );
             }
 
             DB::commit();
