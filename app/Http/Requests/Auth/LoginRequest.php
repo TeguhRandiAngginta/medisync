@@ -38,9 +38,23 @@ class LoginRequest extends FormRequest
      *
      * @throws ValidationException
      */
+    /**
+     * Attempt to authenticate the request's credentials.
+     *
+     * @throws ValidationException
+     */
     public function authenticate(): void
     {
         $this->ensureIsNotRateLimited();
+        $user = \App\Models\User::where('email', $this->email)->first();
+
+        if ($user && !$user->is_active) {
+            RateLimiter::hit($this->throttleKey());
+
+            throw ValidationException::withMessages([
+                'email' => 'Akses ditolak: Akun Anda telah dinonaktifkan. Silakan hubungi Administrator.',
+            ]);
+        }
 
         if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
