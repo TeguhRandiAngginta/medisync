@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Medicine;
 use App\Models\ProductBatch;
 use App\Models\StockAdjustment;
+use App\Models\AuditLog;
 use Illuminate\Support\Facades\DB;
 use Exception;
 
@@ -54,6 +55,15 @@ class InventoryService
 
         self::syncMedicineStock($medicineId);
 
+        // LOG PERGERAKAN STOK KELUAR (POS / KASIR)
+        if (class_exists(AuditLog::class)) {
+            AuditLog::record(
+                'stok', 
+                'UPDATE', 
+                "Pengurangan stok FEFO otomatis sebesar {$requestedQty} unit untuk obat '{$medicine->name}' melalui transaksi POS/Kasir."
+            );
+        }
+
         return $requestedQty > 0 ? ($totalCostOfGoodsSold / $requestedQty) : 0.0;
     }
 
@@ -69,6 +79,18 @@ class InventoryService
             }
 
             self::syncMedicineStock($medicineId);
+
+            // LOG PERGERAKAN STOK KEMBALI (RESTORE / BATAL TRANSAKSI)
+            if (class_exists(AuditLog::class)) {
+                $medicine = Medicine::find($medicineId);
+                $medicineName = $medicine ? $medicine->name : 'Obat Tidak Diketahui';
+                
+                AuditLog::record(
+                    'stok', 
+                    'RESTORE', 
+                    "Pengembalian stok otomatis sebesar {$quantity} unit untuk obat '{$medicineName}' akibat pembatalan atau penghapusan transaksi."
+                );
+            }
         });
     }
 
@@ -83,6 +105,7 @@ class InventoryService
         DB::transaction(function () use ($batchId, $actualStock, $type, $notes) {
             $batch = ProductBatch::where('id', $batchId)->lockForUpdate()->firstOrFail();
             $systemStock = $batch->stock_quantity;
+            $medicineName = $batch->medicine->name ?? 'Obat Tidak Diketahui';
             
             $difference = $actualStock - $systemStock;
 
@@ -100,6 +123,16 @@ class InventoryService
             ]);
 
             self::syncMedicineStock($batch->medicine_id);
+            if (class_exists(AuditLog::class)) {
+                $statusType = $difference > 0 ? "PENAMBAHAN" : ($difference < 0 ? "PENGURANGAN" : "PENYESUAIAN");
+                $diffAbs = abs($difference);
+                
+                AuditLog::record(
+                    'stok', 
+                    'UPDATE', 
+                    "Stok Opname / Penyesuaian {$statusType} obat {$medicineName} (Batch: {$batch->batch_number}). Stok Sistem: {$systemStock}, Realita: {$actualStock} (Selisih: {$diffAbs})."
+                );
+            }
         });
     }
 }
