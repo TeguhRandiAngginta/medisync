@@ -74,13 +74,6 @@ export default function Create({ suppliers, medicines }) {
 
             <div className="max-w-7xl mx-auto pb-12">
                 <form onSubmit={submit} className="space-y-6">
-                    
-                    {/* NOTIFIKASI ERROR UMUM DARI BACKEND */}
-                    {errors.message && (
-                        <div className="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-2xl text-red-600 dark:text-red-400 text-xs font-bold shadow-sm">
-                            ⚠️ {errors.message}
-                        </div>
-                    )}
 
                     {/* KARTU HEADER DOKUMEN */}
                     <div className="bg-white dark:bg-[#1E272E] p-8 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 transition-colors">

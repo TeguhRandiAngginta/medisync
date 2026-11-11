@@ -63,6 +63,11 @@ class ReferenceController extends Controller
 
     public function destroyLocationType(LocationType $locationType)
     {
+        $usedCount = \App\Models\Rack::where('location_type_id', $locationType->id)->count();
+        if ($usedCount > 0) {
+            return back()->withErrors(['message' => "Tindakan Ditolak: Tipe lokasi ini sedang digunakan oleh {$usedCount} rak/etalase aktif."]);
+        }
+
         $name = $locationType->name;
         $locationType->delete();
         AuditLog::record('referensi', 'DELETE', "Menghapus tipe lokasi: {$name}");
@@ -136,6 +141,11 @@ class ReferenceController extends Controller
 
     public function destroyMedicineCategory(MedicineCategory $medicineCategory)
     {
+        $usedCount = \App\Models\Medicine::where('medicine_category_id', $medicineCategory->id)->count();
+        if ($usedCount > 0) {
+            return back()->withErrors(['message' => "Tindakan Ditolak: Golongan obat ini sedang digunakan oleh {$usedCount} data master obat."]);
+        }
+
         $name = $medicineCategory->name;
         $medicineCategory->delete();
         

@@ -21,6 +21,7 @@ export default function Create({ categories, suppliers, racks }) {
         selling_price: '',
         min_stock: 0,
         max_stock: '',
+        is_active: true,
     });
     const [isScannerOpen, setIsScannerOpen] = useState(false);
 
@@ -116,10 +117,35 @@ export default function Create({ categories, suppliers, racks }) {
                                     {racks.map(rack => <option key={rack.id} value={rack.id}>{rack.name} ({rack.code})</option>)}
                                 </select>
                             </div>
-                            <div className="flex items-center mt-8">
-                                <input type="checkbox" id="resep" checked={data.requires_prescription} onChange={e => setData('requires_prescription', e.target.checked)} className="w-5 h-5 text-[#48CFA4] bg-gray-100 border-gray-300 rounded focus:ring-[#48CFA4] dark:focus:ring-[#48CFA4] dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" />
-                                <label htmlFor="resep" className="ml-3 text-sm font-bold text-gray-900 dark:text-gray-300">Wajib Resep Dokter</label>
+                            <div className="flex flex-col justify-center gap-4 mt-2 md:mt-8 p-4 bg-gray-50/50 dark:bg-[#151E24]/50 rounded-xl border border-gray-100 dark:border-gray-800/60">
+                            <div className="flex items-center">
+                                <input 
+                                    type="checkbox" 
+                                    id="resep" 
+                                    checked={data.requires_prescription} 
+                                    onChange={e => setData('requires_prescription', e.target.checked)} 
+                                    className="w-5 h-5 text-[#48CFA4] bg-white border-gray-300 rounded focus:ring-[#48CFA4] dark:focus:ring-[#48CFA4] dark:ring-offset-[#151E24] focus:ring-2 dark:bg-[#1E272E] dark:border-gray-600 transition-all cursor-pointer" 
+                                />
+                                <label htmlFor="resep" className="ml-3 text-sm font-bold text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                                    Wajib Resep Dokter
+                                </label>
                             </div>
+                            <div className="flex items-center">
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={data.is_active} 
+                                        onChange={e => setData('is_active', e.target.checked)} 
+                                        className="sr-only peer" 
+                                    />
+                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#48CFA4]/30 dark:peer-focus:ring-[#48CFA4]/20 rounded-full peer dark:bg-[#1E272E] border border-gray-300 dark:border-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#48CFA4] peer-checked:border-[#48CFA4]"></div>
+                                    <span className="ml-3 text-sm font-bold text-gray-700 dark:text-gray-300 select-none">
+                                        Status Jual Aktif
+                                    </span>
+                                </label>
+                            </div>
+
+                        </div>
                         </div>
                     </div>
 
