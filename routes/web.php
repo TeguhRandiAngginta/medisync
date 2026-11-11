@@ -24,6 +24,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // POS & Penjualan (Bisa diakses Superadmin, Apoteker, dan Kasir)
     Route::get('/pos', [App\Http\Controllers\PosController::class, 'index'])->name('pos.index');
+    Route::post('/pos/shift/open', [App\Http\Controllers\CashRegisterController::class, 'openShift'])->name('pos.shift.open');
+    Route::post('/pos/shift/close', [App\Http\Controllers\CashRegisterController::class, 'closeShift'])->name('pos.shift.close');
     Route::get('/api/pos/medicines', [App\Http\Controllers\PosController::class, 'searchMedicines'])->name('api.pos.medicines');
     Route::post('/pos', [App\Http\Controllers\PosController::class, 'store'])->name('pos.store');
     Route::get('/pos/receipt/{invoice}', [App\Http\Controllers\PosController::class, 'printReceipt'])->name('pos.receipt');

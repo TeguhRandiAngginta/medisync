@@ -33,8 +33,10 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'auth' => [
                 'user' => $request->user() ? $request->user()->load('role') : null,
+                'active_shift' => $request->user() 
+                    ? \App\Models\CashRegister::where('user_id', $request->user()->id)->where('status', 'open')->first() 
+                    : null,
             ],
-            // Flash messages global
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),

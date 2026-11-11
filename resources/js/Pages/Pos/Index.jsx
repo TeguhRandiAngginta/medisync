@@ -1,5 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, useForm } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 
@@ -10,7 +10,7 @@ import PrescriptionModal from './Components/PrescriptionModal';
 import SimulationModal from './Components/SimulationModal';
 import ReceiptModal from './Components/ReceiptModal';
 
-export default function Index({ medicines }) {
+export default function Index({ medicines, activeShift }) {
     // === STATE UTAMA ===
     const [cart, setCart] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -28,6 +28,14 @@ export default function Index({ medicines }) {
     const [isFetchingPrescription, setIsFetchingPrescription] = useState(false);
 
     const [activePrescriptionId, setActivePrescriptionId] = useState(null);
+    const openShiftForm = useForm({
+        opening_amount: ''
+    });
+
+    const handleOpenShift = (e) => {
+        e.preventDefault();
+        openShiftForm.post(route('pos.shift.open'));
+    };
 
     // === PERHITUNGAN & FILTER ===
     const formatRupiah = (number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number || 0);
@@ -229,60 +237,95 @@ export default function Index({ medicines }) {
         <AuthenticatedLayout header="Point of Sales (Kasir)">
             <Head title="Kasir - Penjualan" />
 
-            <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-140px)]">
-                {/* KOMPONEN KIRI */}
-                <ProductList 
-                    searchQuery={searchQuery}
-                    setSearchQuery={setSearchQuery}
-                    filteredMedicines={filteredMedicines}
-                    addToCart={addToCart}
-                    setIsPrescriptionModalOpen={setIsPrescriptionModalOpen}
-                />
+            {!activeShift ? (
+                <div className="flex items-center justify-center h-[calc(100vh-140px)]">
+                    <div className="bg-white dark:bg-[#1E272E] p-8 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 max-w-md w-full text-center">
+                        <div className="w-20 h-20 bg-[#EAF5F0] dark:bg-[#253939] rounded-full flex items-center justify-center mx-auto mb-6">
+                            <svg className="w-10 h-10 text-[#48CFA4]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                        </div>
+                        <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Buka Shift Kasir</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">Silakan masukkan uang modal awal (kembalian) yang ada di laci kasir Anda untuk memulai transaksi hari ini.</p>
+                        
+                        <form onSubmit={handleOpenShift} className="space-y-4">
+                            <div>
+                                <input 
+                                    type="number" 
+                                    min="0"
+                                    required
+                                    placeholder="Masukkan Nominal (Misal: 100000)"
+                                    className="w-full px-4 py-4 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-2xl focus:border-[#48CFA4] focus:ring-2 focus:ring-[#48CFA4]/20 text-gray-900 dark:text-gray-100 font-mono text-xl text-center font-bold"
+                                    value={openShiftForm.data.opening_amount}
+                                    onChange={e => openShiftForm.setData('opening_amount', e.target.value)}
+                                />
+                                {openShiftForm.errors.opening_amount && <p className="text-red-500 text-xs mt-2">{openShiftForm.errors.opening_amount}</p>}
+                            </div>
+                            <button 
+                                type="submit" 
+                                disabled={openShiftForm.processing}
+                                className="w-full py-4 bg-[#48CFA4] hover:bg-[#3AB890] text-white rounded-2xl font-bold text-base shadow-lg shadow-[#48CFA4]/30 disabled:opacity-50 transition-colors cursor-pointer"
+                            >
+                                {openShiftForm.processing ? 'Membuka Shift...' : 'Buka Shift Sekarang'}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            ) : (
+                <>
+                    <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-140px)]">
+                        {/* KOMPONEN KIRI (PRODUK) */}
+                        <ProductList 
+                            searchQuery={searchQuery}
+                            setSearchQuery={setSearchQuery}
+                            filteredMedicines={filteredMedicines}
+                            addToCart={addToCart}
+                            setIsPrescriptionModalOpen={setIsPrescriptionModalOpen}
+                        />
 
-                {/* KOMPONEN KANAN */}
-                <CartSidebar 
-                    cart={cart}
-                    removeFromCart={removeFromCart}
-                    updateQuantity={updateQuantity}
-                    subtotal={subtotal}
-                    payments={payments}
-                    setPayments={setPayments}
-                    totalPaid={totalPaid}
-                    changeAmount={changeAmount}
-                    handleProceedCheckout={handleProceedCheckout}
-                    isProcessing={isProcessing}
-                    formatRupiah={formatRupiah}
-                />
-            </div>
+                        {/* KOMPONEN KANAN (KERANJANG) */}
+                        <CartSidebar 
+                            cart={cart}
+                            removeFromCart={removeFromCart}
+                            updateQuantity={updateQuantity}
+                            subtotal={subtotal}
+                            payments={payments}
+                            setPayments={setPayments}
+                            totalPaid={totalPaid}
+                            changeAmount={changeAmount}
+                            handleProceedCheckout={handleProceedCheckout}
+                            isProcessing={isProcessing}
+                            formatRupiah={formatRupiah}
+                        />
+                    </div>
 
-            {/* KOMPONEN MODAL */}
-            <PrescriptionModal 
-                isOpen={isPrescriptionModalOpen}
-                onClose={() => setIsPrescriptionModalOpen(false)}
-                prescriptionNumber={prescriptionNumber}
-                setPrescriptionNumber={setPrescriptionNumber}
-                prescriptionError={prescriptionError}
-                setPrescriptionError={setPrescriptionError}
-                isFetchingPrescription={isFetchingPrescription}
-                handlePullPrescription={handlePullPrescription}
-            />
+                    <PrescriptionModal 
+                        isOpen={isPrescriptionModalOpen}
+                        onClose={() => setIsPrescriptionModalOpen(false)}
+                        prescriptionNumber={prescriptionNumber}
+                        setPrescriptionNumber={setPrescriptionNumber}
+                        prescriptionError={prescriptionError}
+                        setPrescriptionError={setPrescriptionError}
+                        isFetchingPrescription={isFetchingPrescription}
+                        handlePullPrescription={handlePullPrescription}
+                    />
 
-            <SimulationModal 
-                isOpen={showSimulationModal}
-                onClose={() => setShowSimulationModal(false)}
-                simulationType={simulationType}
-                payments={payments}
-                formatRupiah={formatRupiah}
-                executeFinalCheckout={executeFinalCheckout}
-                isProcessing={isProcessing}
-            />
+                    <SimulationModal 
+                        isOpen={showSimulationModal}
+                        onClose={() => setShowSimulationModal(false)}
+                        simulationType={simulationType}
+                        payments={payments}
+                        formatRupiah={formatRupiah}
+                        executeFinalCheckout={executeFinalCheckout}
+                        isProcessing={isProcessing}
+                    />
 
-            <ReceiptModal 
-                sale={completedSale}
-                onClose={() => setCompletedSale(null)}
-                onPrint={handlePrintReceipt}
-                formatRupiah={formatRupiah}
-            />
+                    <ReceiptModal 
+                        sale={completedSale}
+                        onClose={() => setCompletedSale(null)}
+                        onPrint={handlePrintReceipt}
+                        formatRupiah={formatRupiah}
+                    />
+                </>
+            )}
         </AuthenticatedLayout>
     );
 }
