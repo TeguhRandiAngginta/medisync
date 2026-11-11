@@ -1,4 +1,4 @@
-import { Link, usePage } from '@inertiajs/react';
+import { Link, usePage, router } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 
 const Icons = {
@@ -35,6 +35,27 @@ export default function AuthenticatedLayout({ header, children }) {
     const [isDarkMode, setIsDarkMode] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [openMenu, setOpenMenu] = useState('dashboard');
+    const [isCloseShiftModalOpen, setIsCloseShiftModalOpen] = useState(false);
+    const [closingAmount, setClosingAmount] = useState('');
+    const [closingNotes, setClosingNotes] = useState('');
+    const [isClosingShift, setIsClosingShift] = useState(false);
+
+    const handleCloseShift = (e) => {
+        e.preventDefault();
+        setIsClosingShift(true);
+        
+        router.post(route('pos.shift.close'), {
+            closing_amount: closingAmount,
+            notes: closingNotes
+        }, {
+            onSuccess: () => {
+                setIsCloseShiftModalOpen(false);
+                setClosingAmount('');
+                setClosingNotes('');
+            },
+            onFinish: () => setIsClosingShift(false)
+        });
+    };
 
     useEffect(() => {
         const theme = localStorage.getItem('theme');
@@ -204,8 +225,27 @@ export default function AuthenticatedLayout({ header, children }) {
             <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
                 <header className={`h-20 flex-shrink-0 flex items-center justify-between px-8 transition-colors duration-300 relative z-20
                     ${isDarkMode ? 'bg-[#1E272E] border-b border-gray-800' : 'bg-white shadow-sm'}`}>
-                    <div>
-                        {header && <h2 className={`text-xl font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>{header}</h2>}
+                    <div className="flex items-center gap-6">
+                        {header && <h2 className={`text-xl font-bold hidden md:block ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>{header}</h2>}
+                        
+                        {/* INDIKATOR SHIFT KASIR & TOMBOL TUTUP */}
+                        {auth.active_shift && (
+                            <div className="flex items-center gap-0">
+                                <div className="flex items-center gap-2 bg-[#EAF5F0] dark:bg-[#253939] px-3 py-1.5 rounded-l-full border border-[#48CFA4]/30 border-r-0">
+                                    <span className="relative flex h-2.5 w-2.5">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#48CFA4] opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#48CFA4]"></span>
+                                    </span>
+                                    <span className="text-xs font-bold text-[#246A55] dark:text-[#67E2B4]">Shift Aktif</span>
+                                </div>
+                                <button 
+                                    onClick={() => setIsCloseShiftModalOpen(true)}
+                                    className="bg-red-500 hover:bg-red-600 text-white text-[11px] uppercase tracking-wider font-bold px-3 py-2 rounded-r-full shadow-sm transition-colors cursor-pointer"
+                                >
+                                    Tutup Shift
+                                </button>
+                            </div>
+                        )}
                     </div>
                     <div className="flex items-center gap-6">
                         <button type="button" onClick={toggleTheme} className={`p-2 rounded-full transition-colors focus:outline-none ${isDarkMode ? 'bg-gray-700 text-yellow-400' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
@@ -274,6 +314,55 @@ export default function AuthenticatedLayout({ header, children }) {
                     </div>
                 </main>
             </div>
+            {isCloseShiftModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm animate-in fade-in">
+                    <div className="bg-white dark:bg-[#1E272E] p-6 rounded-2xl shadow-2xl max-w-sm w-full mx-4 border border-gray-100 dark:border-gray-800">
+                        <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2">Tutup Shift Kasir</h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Hitung jumlah uang fisik di dalam laci kasir saat ini dan masukkan ke kolom di bawah untuk rekonsiliasi laporan.</p>
+                        
+                        <form onSubmit={handleCloseShift} className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Total Uang Tunai Fisik (Rp) <span className="text-red-500">*</span></label>
+                                <input 
+                                    type="number" 
+                                    min="0"
+                                    required
+                                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-xl focus:border-[#48CFA4] focus:ring-2 focus:ring-[#48CFA4]/20 text-gray-900 dark:text-gray-100 font-mono text-base font-bold"
+                                    value={closingAmount}
+                                    onChange={e => setClosingAmount(e.target.value)}
+                                    placeholder="Contoh: 1500000"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Catatan Kasir (Opsional)</label>
+                                <textarea 
+                                    className="w-full px-4 py-2 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-xl focus:border-[#48CFA4] focus:ring-2 focus:ring-[#48CFA4]/20 text-gray-900 dark:text-gray-100 text-sm resize-none h-20"
+                                    value={closingNotes}
+                                    onChange={e => setClosingNotes(e.target.value)}
+                                    placeholder="Ada selisih uang atau kejadian khusus?"
+                                ></textarea>
+                            </div>
+                            
+                            <div className="flex gap-2 pt-2">
+                                <button 
+                                    type="button"
+                                    onClick={() => setIsCloseShiftModalOpen(false)}
+                                    className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-xl font-bold text-sm transition-colors cursor-pointer"
+                                >
+                                    Batal
+                                </button>
+                                <button 
+                                    type="submit"
+                                    disabled={isClosingShift}
+                                    className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm shadow-md disabled:opacity-50 transition-colors cursor-pointer"
+                                >
+                                    {isClosingShift ? 'Memproses...' : 'Akhiri Shift'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

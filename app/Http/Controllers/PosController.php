@@ -1,7 +1,5 @@
 <?php
 
-namespace App\Controllers; 
-
 namespace App\Http\Controllers;
 
 use App\Models\Medicine;
@@ -17,8 +15,11 @@ class PosController extends Controller
 {
     public function index()
     {
-        $today = now()->toDateString();
+        $activeShift = \App\Models\CashRegister::where('user_id', auth()->id())
+            ->where('status', 'open')
+            ->first();
 
+        $today = now()->toDateString();
         $medicines = Medicine::where('is_active', true)
             ->withSum(['batches as real_stock' => function ($query) use ($today) {
                 $query->where('stock_quantity', '>', 0)
@@ -32,7 +33,8 @@ class PosController extends Controller
             ->values();
 
         return Inertia::render('Pos/Index', [
-            'medicines' => $medicines
+            'medicines' => $medicines,
+            'activeShift' => $activeShift
         ]);
     }
 
@@ -96,9 +98,15 @@ class PosController extends Controller
             $invoiceNumber = 'TRX-' . date('YmdHis') . '-' . rand(100, 999);
             $totalAmount = collect($request->cart)->sum(fn($i) => $i['quantity'] * $i['price']);
 
+            $activeShift = \App\Models\CashRegister::where('user_id', auth()->id())->where('status', 'open')->first();
+            if (!$activeShift) {
+                throw new \Exception('Gagal! Anda belum membuka shift kasir.');
+            }
+
             $sale = Sale::create([
                 'invoice_number' => $invoiceNumber,
                 'user_id' => auth()->id(),
+                'cash_register_id' => $activeShift->id,
                 'total_amount' => $totalAmount,
                 'subtotal_amount'  => $totalAmount,
                 'paid_amount'    => $request->paid_amount,
