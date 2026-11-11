@@ -52,7 +52,12 @@ class ProductController extends Controller
             'selling_price' => 'required|numeric|min:0',
             'min_stock' => 'required|integer|min:0',
             'max_stock' => 'nullable|integer|min:0',
+            'is_active' => 'boolean',
         ]);
+
+        if (!isset($validated['is_active'])) {
+            $validated['is_active'] = true;
+        }
 
         $medicine = Medicine::create($validated);
         
@@ -63,6 +68,13 @@ class ProductController extends Controller
 
     public function destroy(Medicine $product)
     {
+        $batchCount = \App\Models\ProductBatch::withTrashed()->where('medicine_id', $product->id)->count();
+        $purchaseCount = \App\Models\PurchaseDetail::where('medicine_id', $product->id)->count();
+        
+        if ($batchCount > 0 || $purchaseCount > 0) {
+            return back()->withErrors(['message' => "Aksi Ditolak: Obat '{$product->name}' tidak boleh dihapus karena sudah terhubung dengan Faktur Pembelian dan Monitoring Batch. (Solusi: Edit obat ini dan matikan status aktifnya jika tidak dijual lagi)."]);
+        }
+
         $name = $product->name;
         $product->delete(); 
         
@@ -97,6 +109,7 @@ class ProductController extends Controller
             'selling_price' => 'required|numeric|min:0',
             'min_stock' => 'required|integer|min:0',
             'max_stock' => 'nullable|integer|min:0',
+            'is_active' => 'boolean',
         ]);
 
         $product->update($validated);

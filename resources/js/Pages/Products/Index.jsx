@@ -58,27 +58,45 @@ export default function Index({ products }) {
                         ) : (
                             products.map((product) => (
                                 <tr key={product.id} className="border-b border-gray-50 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-[#151E24] transition-colors">
+                                    {/* 1. KOLOM SKU & NAMA (Dan Status Aktif) */}
                                     <td className="px-6 py-5">
                                         <div className="font-mono text-xs text-gray-500 mb-1">{product.sku}</div>
-                                        <div className="font-bold text-blue-600 dark:text-[#6FD8E8]">{product.name}</div>
-                                        {product.generic_name && <div className="text-[11px] text-gray-400">{product.generic_name}</div>}
+                                        <div className="flex items-center gap-2">
+                                            <div className="font-bold text-blue-600 dark:text-[#6FD8E8]">{product.name}</div>
+                                            {!product.is_active && (
+                                                <span className="px-2 py-0.5 bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 text-[10px] font-bold rounded-full border border-red-200 dark:border-red-800">
+                                                    NONAKTIF
+                                                </span>
+                                            )}
+                                        </div>
+                                        {product.generic_name && <div className="text-[11px] text-gray-400 mt-0.5">{product.generic_name}</div>}
                                     </td>
+                                    
+                                    {/* 2. KOLOM GOLONGAN */}
                                     <td className="px-6 py-5">
                                         <span className="px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg text-xs font-bold">
                                             {product.category?.name || '-'}
                                         </span>
                                     </td>
+
+                                    {/* 3. KOLOM DOSIS & SATUAN */}
                                     <td className="px-6 py-5 text-gray-700 dark:text-gray-300">
                                         <span className="font-bold">{product.dosage_strength || '-'}</span> {product.dosage_form} 
                                         <div className="text-xs text-gray-400 mt-1">Satuan: <span className="font-bold">{product.base_unit}</span></div>
                                     </td>
+
+                                    {/* 4. KOLOM RAK */}
                                     <td className="px-6 py-5 font-bold text-[#48CFA4]">{product.rack?.code || '-'}</td>
+
+                                    {/* 5. KOLOM RESEP */}
                                     <td className="px-6 py-5 text-center">
                                         {product.requires_prescription ? 
                                             <span className="text-red-500 font-bold text-xs bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded-md">Wajib</span> : 
                                             <span className="text-gray-400 text-xs">-</span>
                                         }
                                     </td>
+
+                                    {/* 6. KOLOM AKSI */}
                                     <td className="px-6 py-5 text-center">
                                         <div className="flex justify-center items-center gap-3">
                                             <Link href={route('products.edit', product.id)} className="p-2 text-[#48CFA4] bg-[#EAF5F0] hover:bg-[#48CFA4] hover:text-white dark:bg-[#253939] dark:text-[#67E2B4] dark:hover:bg-[#48CFA4] dark:hover:text-white rounded-lg transition-all duration-200"><EditIcon /></Link>

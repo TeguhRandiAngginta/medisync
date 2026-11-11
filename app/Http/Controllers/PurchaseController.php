@@ -52,7 +52,7 @@ class PurchaseController extends Controller
     {
         $validated = $request->validate([
             'internal_receipt_number' => 'required|string|unique:purchases,internal_receipt_number',
-            'invoice_number' => 'required|string',
+            'invoice_number' => 'required|string|unique:purchases,invoice_number',
             'supplier_id' => 'required|exists:suppliers,id',
             'purchase_date' => 'required|date',
             'notes' => 'nullable|string',
@@ -63,6 +63,8 @@ class PurchaseController extends Controller
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.uom' => 'required|string|max:50',
             'items.*.purchase_price' => 'required|numeric|min:0',
+        ], [
+            'invoice_number.unique' => 'Tindakan Ditolak: Nomor Faktur PBF ini sudah terdaftar atau masih berada di dalam Keranjang Sampah (Trash). Silakan gunakan nomor lain atau pulihkan faktur di menu Trash.'
         ]);
 
         DB::beginTransaction();
