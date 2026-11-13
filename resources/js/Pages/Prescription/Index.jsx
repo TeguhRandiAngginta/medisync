@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 export default function Index({ prescriptions }) {
     const [selectedPrint, setSelectedPrint] = useState(null);
+    const [selectedEtiket, setSelectedEtiket] = useState(null);
     const [selectedDelete, setSelectedDelete] = useState(null);
 
     const executeDelete = () => {
@@ -31,6 +32,65 @@ export default function Index({ prescriptions }) {
         iframeDoc.document.close();
         
         setTimeout(() => { printIframe.contentWindow.focus(); printIframe.contentWindow.print(); setSelectedPrint(null); }, 300);
+    };
+
+    const executePrintEtiket = () => {
+        let printIframe = document.getElementById('etiket-print-iframe');
+        if (!printIframe) {
+            printIframe = document.createElement('iframe');
+            printIframe.id = 'etiket-print-iframe';
+            Object.assign(printIframe.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: 'none' });
+            document.body.appendChild(printIframe);
+        }
+        
+        const iframeDoc = printIframe.contentWindow || printIframe.contentDocument.document || printIframe.contentDocument;
+        iframeDoc.document.open();
+        
+        let etiketPages = selectedEtiket.items.map((i, index) => `
+            <div class="etiket-page">
+                <div class="header">APOTEK MEDISYNC</div>
+                <div class="patient">Pasien: <b>${selectedEtiket.patient_name}</b></div>
+                <div class="date">${selectedEtiket.prescription_date}</div>
+                <div class="medicine-name">${i.medicine?.name || 'Obat'}</div>
+                <div class="signa-box">
+                    <div class="signa-title">Aturan Pakai:</div>
+                    <div class="signa-text">${i.signa}</div>
+                </div>
+            </div>
+        `).join('');
+        
+        iframeDoc.document.write(`
+            <html>
+            <head>
+                <style>
+                    /* Ukuran Stiker Thermal Etiket (Lebar 50mm, Tinggi 30mm) */
+                    @page { size: 50mm 30mm; margin: 0; }
+                    body { font-family: 'Arial', sans-serif; margin: 0; padding: 0; background: #fff; color: #000; }
+                    .etiket-page {
+                        width: 50mm; height: 30mm;
+                        padding: 2mm 3mm;
+                        box-sizing: border-box;
+                        page-break-after: always;
+                        position: relative;
+                        overflow: hidden;
+                    }
+                    .header { text-align: center; font-size: 8px; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 1px; margin-bottom: 2px; }
+                    .patient { font-size: 9px; margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                    .date { font-size: 7px; text-align: right; position: absolute; top: 2mm; right: 3mm; }
+                    .medicine-name { font-size: 10px; font-weight: bold; text-align: center; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                    .signa-box { border: 1.5px solid #000; border-radius: 3px; padding: 2px; text-align: center; height: 11mm; display: flex; flex-direction: column; justify-content: center; }
+                    .signa-title { font-size: 7px; font-weight: bold; margin-bottom: 1px; }
+                    .signa-text { font-size: 11px; font-weight: 900; }
+                </style>
+            </head>
+            <body>
+                ${etiketPages}
+            </body>
+            </html>
+        `);
+        iframeDoc.document.close();
+        
+        setTimeout(() => { printIframe.contentWindow.focus(); printIframe.contentWindow.print(); setSelectedEtiket(null); }, 300);
     };
 
     return (
@@ -84,7 +144,16 @@ export default function Index({ prescriptions }) {
                                         </td>
                                         <td className="px-6 py-4 text-center">
                                             <div className="flex justify-center gap-2">
-                                                {/* Tombol Cetak Struk */}
+                                                {/* Tombol Cetak Etiket Stiker */}
+                                                <button 
+                                                    title="Cetak Etiket Stiker" 
+                                                    onClick={() => setSelectedEtiket(resep)} 
+                                                    className="p-2.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 text-emerald-600 rounded-xl transition-colors cursor-pointer"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
+                                                </button>
+
+                                                {/* Tombol Cetak Salinan */}
                                                 <button 
                                                     title="Cetak Salinan Resep" 
                                                     onClick={() => setSelectedPrint(resep)} 
@@ -104,7 +173,7 @@ export default function Index({ prescriptions }) {
                                                     </Link>
                                                 )}
 
-                                                {/* Tombol Hapus (Memicu Modal Kustom) */}
+                                                {/* Tombol Hapus */}
                                                 {resep.status === 'DRAFT' && (
                                                     <button 
                                                         title="Hapus Resep" 
@@ -170,7 +239,25 @@ export default function Index({ prescriptions }) {
                         <div className="text-center py-3 text-[10px] font-bold">LEKAS SEMBUH</div>
                         <div className="flex gap-2 pt-4 mt-2">
                             <button onClick={() => setSelectedPrint(null)} className="flex-1 py-2 bg-gray-200 font-sans font-bold rounded-xl text-gray-800 cursor-pointer">Batal</button>
-                            <button onClick={executePrint} className="flex-1 py-2 bg-emerald-600 font-sans font-bold rounded-xl text-white cursor-pointer">Cetak Struk Thermal</button>
+                            <button onClick={executePrint} className="flex-1 py-2 bg-emerald-600 font-sans font-bold rounded-xl text-white cursor-pointer">Cetak Salinan (58mm)</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Cetak Etiket Stiker */}
+            {selectedEtiket && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in">
+                    <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-sm w-full mx-4 text-black text-center">
+                        <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-4">
+                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
+                        </div>
+                        <h3 className="text-lg font-bold mb-1">Cetak Label Etiket</h3>
+                        <p className="text-xs text-gray-500 mb-6">Akan mencetak <b>{selectedEtiket.items.length} stiker</b> berukuran 50x30mm untuk ditempel pada kemasan obat pasien <b>{selectedEtiket.patient_name}</b>.</p>
+                        
+                        <div className="flex gap-2">
+                            <button onClick={() => setSelectedEtiket(null)} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 font-sans font-bold rounded-xl text-gray-800 cursor-pointer transition-colors">Batal</button>
+                            <button onClick={executePrintEtiket} className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 font-sans font-bold rounded-xl text-white shadow-md cursor-pointer transition-colors">Mulai Cetak Stiker</button>
                         </div>
                     </div>
                 </div>

@@ -6,6 +6,7 @@ use App\Models\Medicine;
 use App\Models\Sale;
 use App\Models\SaleDetail;
 use App\Models\Prescription;
+use App\Services\GoogleAIService;
 use App\Services\InventoryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -40,14 +41,14 @@ class PosController extends Controller
 
     public function searchMedicines(Request $request)
     {
-        $query = $request->get('q');
+        $query = trim($request->get('q'));
         $today = now()->toDateString();
 
         $medicines = Medicine::where('is_active', true)
             ->when($query, function ($q) use ($query) {
                 $q->where(function ($sub) use ($query) {
-                    $sub->where('name', 'like', "%{$query}%")
-                        ->orWhere('sku', 'like', "%{$query}%")
+                    $sub->where('name', 'ilike', "%{$query}%")
+                        ->orWhere('sku', 'ilike', "%{$query}%")
                         ->orWhere('barcode', $query);
                 });
             })
@@ -63,6 +64,58 @@ class PosController extends Controller
             ->values();
 
         return response()->json($medicines);
+    }
+
+    public function smartSearch(Request $request)
+    {
+        $request->validate(['symptoms' => 'required|string']);
+        
+        $symptoms = trim($request->symptoms);
+        $today = now()->toDateString();
+        $keywords = [$symptoms];
+
+        try {
+            $prompt = "Pasien mengeluh: '{$symptoms}'. Berikan HANYA array JSON berisi maksimal 5 kata kunci (nama generik/kandungan/kategori) obat yang paling relevan untuk keluhan tersebut. Format wajib: [\"paracetamol\", \"ibuprofen\", \"sirup batuk\"]. Jangan berikan teks lain.";
+            
+            $aiResponse = \App\Services\GoogleAIService::generateContent($prompt);
+            
+            if (isset($aiResponse['raw_text'])) {
+                $cleaned = preg_replace('/```json\s*|\s*```/', '', $aiResponse['raw_text']);
+                $parsed = json_decode(trim($cleaned), true);
+                if (is_array($parsed) && !empty($parsed)) {
+                    $keywords = $parsed;
+                }
+            } elseif (is_array($aiResponse) && !empty($aiResponse)) {
+                $keywords = $aiResponse;
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning("Smart Search AI fallback: " . $e->getMessage());
+        }
+
+        $medicines = Medicine::where('is_active', true)
+            ->where(function ($q) use ($keywords, $symptoms) {
+                foreach ($keywords as $keyword) {
+                    $q->orWhere('name', 'ilike', "%{$keyword}%")
+                        ->orWhere('description', 'ilike', "%{$keyword}%")
+                        ->orWhere('category', 'ilike', "%{$keyword}%");
+                }
+                $q->orWhere('name', 'ilike', "%{$symptoms}%");
+            })
+            ->withSum(['batches as real_stock' => function ($q) use ($today) {
+                $q->where('stock_quantity', '>', 0)->where('expired_date', '>=', $today);
+            }], 'stock_quantity')
+            ->limit(15)
+            ->get()
+            ->map(function ($medicine) {
+                $medicine->stock = (int) ($medicine->real_stock ?? 0);
+                return $medicine;
+            })
+            ->values();
+
+        return response()->json([
+            'ai_analysis' => $keywords,
+            'medicines' => $medicines
+        ]);
     }
 
     public function store(Request $request)

@@ -1,10 +1,58 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link, useForm } from '@inertiajs/react';
-import InputError from '@/Components/InputError';
-import PrimaryButton from '@/Components/PrimaryButton';
+import { Head, useForm } from '@inertiajs/react';
+import axios from 'axios';
 
-export default function Create({ suppliers, medicines }) {
+import { extractPurchaseInvoice, generateInvoiceSummaryNote } from './Components/PurchaseAiService';
+import PurchaseHeaderCard from './Components/PurchaseHeaderCard';
+import PurchaseItemsTable from './Components/PurchaseItemsTable';
+import PurchaseModals from './Components/PurchaseModals';
+
+export default function Create({ suppliers, medicines, supplierTypes = [], categories = [], racks = [] }) {
+    const [supplierList, setSupplierList] = useState(suppliers || []);
+    const [medicineList, setMedicineList] = useState(medicines || []);
+    const [isScanning, setIsScanning] = useState(false);
+    const [isGeneratingNote, setIsGeneratingNote] = useState(false);
+    const [previewUrl, setPreviewUrl] = useState(null);
+    const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+    const [alertInfo, setAlertInfo] = useState({ show: false, message: '', type: 'success' });
+
+    // State Deteksi Supplier Belum Terdaftar & Modal Quick Add Supplier
+    const [unregisteredSupplier, setUnregisteredSupplier] = useState(null);
+    const [isQuickAddSupplierModalOpen, setIsQuickAddSupplierModalOpen] = useState(false);
+    const [quickSupplierForm, setQuickSupplierForm] = useState({
+        supplier_type_id: '',
+        code: '',
+        name: '',
+        contact_person: '',
+        phone: '',
+        email: '',
+        address: ''
+    });
+    const [isSavingSupplier, setIsSavingSupplier] = useState(false);
+
+    // State Modal Quick Add Obat Baru
+    const [isQuickAddMedicineModalOpen, setIsQuickAddMedicineModalOpen] = useState(false);
+    const [targetItemIndex, setTargetItemIndex] = useState(null);
+    const [quickMedicineForm, setQuickMedicineForm] = useState({
+        name: '',
+        generic_name: '',
+        sku: '',
+        barcode: '',
+        medicine_category_id: '',
+        supplier_id: '',
+        rack_id: '',
+        dosage_form: '',
+        dosage_strength: '',
+        requires_prescription: false,
+        base_unit: '',
+        selling_price: '',
+        min_stock: 0,
+        max_stock: '',
+        is_active: true
+    });
+    const [isSavingMedicine, setIsSavingMedicine] = useState(false);
+
     const generateReceiptNo = () => {
         const date = new Date();
         const ymd = date.getFullYear().toString() + (date.getMonth() + 1).toString().padStart(2, '0') + date.getDate().toString().padStart(2, '0');
@@ -20,10 +68,17 @@ export default function Create({ suppliers, medicines }) {
         purchase_date: new Date().toISOString().split('T')[0],
         notes: '',
         total_amount: 0,
+        attachment: null,
         items: [
             { medicine_id: '', batch_number: '', expired_date: '', quantity: 1, uom: 'Tablet', purchase_price: 0, subtotal: 0 }
         ],
     });
+
+    useEffect(() => {
+        return () => {
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+        };
+    }, [previewUrl]);
 
     const formatRupiah = (number) => {
         return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number);
@@ -47,10 +102,8 @@ export default function Create({ suppliers, medicines }) {
         newItems[index][field] = value;
         
         if (field === 'medicine_id') {
-            const selectedMed = medicines.find(m => m.id == value);
-            if (selectedMed) {
-                newItems[index].uom = selectedMed.base_unit || 'Tablet';
-            }
+            const selectedMed = medicineList.find(m => m.id == value);
+            if (selectedMed) newItems[index].uom = selectedMed.base_unit || 'Tablet';
         }
         
         if (field === 'quantity' || field === 'purchase_price' || field === 'medicine_id') {
@@ -63,164 +116,307 @@ export default function Create({ suppliers, medicines }) {
         setData({ ...data, items: newItems, total_amount: total });
     };
 
+    const handleFileSelected = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setData('attachment', file);
+        setPreviewUrl(URL.createObjectURL(file));
+        setUnregisteredSupplier(null);
+        setAlertInfo({ show: true, message: `File "${file.name}" berhasil dilampirkan. Klik "Ekstrak dengan AI" untuk memindai.`, type: 'success' });
+    };
+
+    const handleScanAI = (e) => {
+        e.preventDefault();
+        const file = data.attachment;
+
+        if (!file) {
+            setAlertInfo({ show: true, message: 'Harap pilih file gambar nota faktur PBF terlebih dahulu!', type: 'error' });
+            return;
+        }
+
+        setIsScanning(true);
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = async () => {
+            try {
+                const base64String = reader.result.split(',')[1];
+                const { data: parsedData, fromCache } = await extractPurchaseInvoice(base64String, file.type);
+
+                processAiResult(parsedData);
+                setAlertInfo({ 
+                    show: true, 
+                    message: fromCache 
+                        ? '⚡ Gambar yang sama terdeteksi! Data faktur dimuat instan dari Cache Lokal (0 Kuota AI terpakai).'
+                        : 'Faktur PBF berhasil diekstrak oleh AI dan disimpan ke cache lokal!', 
+                    type: 'success' 
+                });
+            } catch (error) {
+                setAlertInfo({ show: true, message: `Gagal memproses faktur: ${error.message}`, type: 'error' });
+            } finally {
+                setIsScanning(false);
+            }
+        };
+    };
+
+    const processAiResult = (parsedData) => {
+        let matchedSupplierId = '';
+        let similarSupplier = null;
+        const rawSupplier = (parsedData.supplier_name || '').trim();
+        const rawAddress = (parsedData.supplier_address || '').trim();
+
+        if (rawSupplier) {
+            const normalize = (str) => str.toLowerCase().replace(/\b(pt|cv|tbk|persero)\b\.?/g, '').replace(/[^a-z0-9]/g, '');
+            const cleanTarget = normalize(rawSupplier);
+            const exactSup = supplierList.find(s => normalize(s.name) === cleanTarget);
+
+            if (exactSup) {
+                matchedSupplierId = exactSup.id;
+                setUnregisteredSupplier(null);
+            } else {
+                similarSupplier = supplierList.find(s => {
+                    const cleanSup = normalize(s.name);
+                    return cleanSup.includes(cleanTarget) || 
+                            cleanTarget.includes(cleanSup) ||
+                            (cleanTarget.length >= 6 && cleanSup.slice(0, 6) === cleanTarget.slice(0, 6));
+                }) || null;
+
+                setUnregisteredSupplier({ name: rawSupplier, address: rawAddress, similarSupplier });
+            }
+        } else {
+            setUnregisteredSupplier(null);
+        }
+
+        let newItems = [];
+        if (parsedData.items && parsedData.items.length > 0) {
+            newItems = parsedData.items.map(aiItem => {
+                const searchName = (aiItem.medicine_name || '').toLowerCase();
+                const firstWord = searchName.split(' ')[0];
+                const foundMed = medicineList.find(m => 
+                    m.name.toLowerCase().includes(searchName) || 
+                    (firstWord.length >= 4 && m.name.toLowerCase().includes(firstWord))
+                );
+                
+                const qty = parseInt(aiItem.quantity) || 1;
+                const price = parseFloat(aiItem.purchase_price) || 0;
+
+                return {
+                    medicine_id: foundMed ? foundMed.id : '',
+                    raw_name: aiItem.medicine_name || '',
+                    batch_number: aiItem.batch_number || 'BATCH-AI',
+                    expired_date: aiItem.expired_date || new Date(new Date().setMonth(new Date().getMonth() + 12)).toISOString().split('T')[0],
+                    quantity: qty,
+                    uom: aiItem.uom || (foundMed ? foundMed.base_unit : 'Tablet'),
+                    purchase_price: price,
+                    subtotal: qty * price
+                };
+            });
+        }
+
+        const total = newItems.reduce((sum, item) => sum + item.subtotal, 0);
+
+        setData(prev => ({
+            ...prev,
+            supplier_id: matchedSupplierId || '',
+            invoice_number: parsedData.invoice_number || prev.invoice_number,
+            purchase_date: parsedData.purchase_date || prev.purchase_date,
+            items: newItems.length > 0 ? newItems : prev.items,
+            total_amount: newItems.length > 0 ? total : prev.total_amount
+        }));
+    };
+
+    // HANDLER QUICK ADD SUPPLIER
+    const openQuickAddSupplierModal = () => {
+        if (!unregisteredSupplier) return;
+        const defaultType = supplierTypes[0];
+        const randomNum = Math.floor(100 + Math.random() * 900);
+
+        setQuickSupplierForm({
+            supplier_type_id: defaultType ? defaultType.id : '',
+            code: defaultType ? `${defaultType.prefix_code}-${randomNum}` : '',
+            name: unregisteredSupplier.name,
+            contact_person: '',
+            phone: '',
+            email: '',
+            address: unregisteredSupplier.address || ''
+        });
+        setIsQuickAddSupplierModalOpen(true);
+    };
+
+    const handleSaveQuickSupplier = async (e) => {
+        e.preventDefault();
+        setIsSavingSupplier(true);
+        try {
+            const res = await axios.post(route('api.suppliers.quick-store'), quickSupplierForm);
+            const newSupplier = res.data.supplier;
+
+            setSupplierList(prev => [newSupplier, ...prev]);
+            setData('supplier_id', newSupplier.id);
+            setUnregisteredSupplier(null);
+            setIsQuickAddSupplierModalOpen(false);
+            setAlertInfo({ show: true, message: res.data.message, type: 'success' });
+        } catch (error) {
+            setAlertInfo({ show: true, message: error.response?.data?.message || 'Gagal mendaftarkan supplier baru.', type: 'error' });
+        } finally {
+            setIsSavingSupplier(false);
+        }
+    };
+
+    // HANDLER QUICK ADD OBAT BARU KE KATALOG
+    const openQuickAddMedicineModal = (index, item) => {
+        setTargetItemIndex(index);
+        const suggestedPrice = item.purchase_price > 0 ? Math.ceil((item.purchase_price * 1.2) / 500) * 500 : '';
+
+        setQuickMedicineForm({
+            name: item.raw_name || '',
+            generic_name: '',
+            sku: '',
+            barcode: '',
+            medicine_category_id: categories[0]?.id || '',
+            supplier_id: data.supplier_id || '',
+            rack_id: '',
+            dosage_form: '',
+            dosage_strength: '',
+            requires_prescription: false,
+            base_unit: item.uom || 'Tablet',
+            selling_price: suggestedPrice,
+            min_stock: 5,
+            max_stock: '',
+            is_active: true
+        });
+        setIsQuickAddMedicineModalOpen(true);
+    };
+
+    const handleSaveQuickMedicine = async (e) => {
+        e.preventDefault();
+        setIsSavingMedicine(true);
+        try {
+            const res = await axios.post(route('api.products.quick-store'), quickMedicineForm);
+            const newMed = res.data.medicine;
+
+            setMedicineList(prev => [newMed, ...prev]);
+
+            if (targetItemIndex !== null) {
+                const updatedItems = [...data.items];
+                updatedItems[targetItemIndex].medicine_id = newMed.id;
+                updatedItems[targetItemIndex].uom = newMed.base_unit || updatedItems[targetItemIndex].uom;
+                setData('items', updatedItems);
+            }
+
+            setIsQuickAddMedicineModalOpen(false);
+            setAlertInfo({ show: true, message: res.data.message, type: 'success' });
+        } catch (error) {
+            setAlertInfo({ show: true, message: error.response?.data?.message || 'Gagal menyimpan obat ke katalog.', type: 'error' });
+        } finally {
+            setIsSavingMedicine(false);
+        }
+    };
+
+    const handleGenerateAutoNotes = async () => {
+        const validItems = data.items.filter(i => i.medicine_id || i.raw_name);
+        if (validItems.length === 0) {
+            setAlertInfo({ show: true, message: 'Belum ada rincian obat untuk dirangkum!', type: 'error' });
+            return;
+        }
+
+        setIsGeneratingNote(true);
+        try {
+            const supplierObj = supplierList.find(s => s.id == data.supplier_id);
+            const supplierText = supplierObj ? supplierObj.name : (unregisteredSupplier?.name || 'Supplier PBF');
+            const itemSummaries = validItems.map((item, idx) => {
+                const medObj = medicineList.find(m => m.id == item.medicine_id);
+                const medName = medObj ? medObj.name : `${item.raw_name || 'Obat Baru'} [Belum di Master]`;
+                return `${idx + 1}. ${medName} — ${item.quantity} ${item.uom} (Batch: ${item.batch_number || '-'}, Exp: ${item.expired_date || '-'})`;
+            });
+
+            const summaryText = await generateInvoiceSummaryNote({
+                supplierText,
+                invoiceText: data.invoice_number || '-',
+                purchaseDate: data.purchase_date,
+                itemSummaries,
+                totalFormatted: formatRupiah(data.total_amount)
+            });
+
+            setData('notes', summaryText);
+            setAlertInfo({ show: true, message: 'Ringkasan catatan faktur berhasil dibuat otomatis!', type: 'success' });
+        } catch (error) {
+            setAlertInfo({ show: true, message: 'Gagal membuat ringkasan otomatis.', type: 'error' });
+        } finally {
+            setIsGeneratingNote(false);
+        }
+    };
+
     const submit = (e) => {
         e.preventDefault();
-        post(route('purchases.store'));
+        post(route('purchases.store'), { forceFormData: true });
     };
 
     return (
         <AuthenticatedLayout header="Catat Pembelian & Barang Masuk">
             <Head title="Faktur Masuk" />
 
-            <div className="max-w-7xl mx-auto pb-12">
+            <div className="max-w-7xl mx-auto pb-12 space-y-6">
+                {alertInfo.show && (
+                    <div className={`p-4 rounded-2xl text-xs font-bold flex justify-between items-center ${alertInfo.type === 'error' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'}`}>
+                        <span>{alertInfo.message}</span>
+                        <button onClick={() => setAlertInfo({ ...alertInfo, show: false })} className="font-bold px-2 py-1 cursor-pointer">✕</button>
+                    </div>
+                )}
+
                 <form onSubmit={submit} className="space-y-6">
+                    <PurchaseHeaderCard
+                        data={data}
+                        setData={setData}
+                        errors={errors}
+                        supplierList={supplierList}
+                        isScanning={isScanning}
+                        previewUrl={previewUrl}
+                        onFileSelected={handleFileSelected}
+                        onScanAI={handleScanAI}
+                        onOpenPreview={() => setIsPreviewModalOpen(true)}
+                        unregisteredSupplier={unregisteredSupplier}
+                        setUnregisteredSupplier={setUnregisteredSupplier}
+                        onOpenQuickAddSupplierModal={openQuickAddSupplierModal}
+                    />
 
-                    {/* KARTU HEADER DOKUMEN */}
-                    <div className="bg-white dark:bg-[#1E272E] p-8 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 transition-colors">
-                        <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100 dark:border-gray-800">
-                            <div>
-                                <h4 className="text-base font-extrabold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                                    <span className="w-2.5 h-6 bg-[#48CFA4] rounded-full"></span> Informasi Dokumen Pembelian (PBF)
-                                </h4>
-                                <p className="text-xs text-gray-400 mt-1">Nomor sistem dibuat otomatis, sesuaikan data fisik dari faktur distributor.</p>
-                            </div>
-                            <span className="px-3 py-1 bg-[#EAF5F0] dark:bg-[#253939] text-[#246A55] dark:text-[#67E2B4] rounded-full text-xs font-bold uppercase tracking-wider">
-                                Modul Gudang
-                            </span>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                            <div>
-                                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">No. Sistem (Internal)</label>
-                                <input type="text" value={data.internal_receipt_number} disabled className="w-full px-4 py-3 bg-gray-50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-2xl text-gray-500 dark:text-gray-400 font-mono font-bold cursor-not-allowed" />
-                                <InputError message={errors.internal_receipt_number} className="mt-2" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-2">No. Faktur PBF Asli <span className="text-red-500">*</span></label>
-                                <input type="text" value={data.invoice_number} onChange={e => setData('invoice_number', e.target.value)} required placeholder="Cth: INV/2026/001" className="w-full px-4 py-3 bg-gray-50/50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-2xl focus:border-[#48CFA4] focus:ring-2 focus:ring-[#48CFA4]/20 text-gray-900 dark:text-gray-100 uppercase font-bold" />
-                                <InputError message={errors.invoice_number} className="mt-2" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-2">Pilih Supplier PBF <span className="text-red-500">*</span></label>
-                                <select value={data.supplier_id} onChange={e => setData('supplier_id', e.target.value)} required className="w-full px-4 py-3 bg-gray-50/50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-2xl focus:border-[#48CFA4] focus:ring-2 focus:ring-[#48CFA4]/20 text-gray-900 dark:text-gray-100 font-medium">
-                                    <option value="">-- Pilih Supplier --</option>
-                                    {suppliers.map(sup => <option key={sup.id} value={sup.id}>{sup.name}</option>)}
-                                </select>
-                                <InputError message={errors.supplier_id} className="mt-2" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-2">Tanggal di Faktur <span className="text-red-500">*</span></label>
-                                <input type="date" value={data.purchase_date} onChange={e => setData('purchase_date', e.target.value)} required className="w-full px-4 py-3 bg-gray-50/50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-2xl focus:border-[#48CFA4] focus:ring-2 focus:ring-[#48CFA4]/20 text-gray-900 dark:text-gray-100 font-medium" />
-                                <InputError message={errors.purchase_date} className="mt-2" />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* KARTU RINCIAN OBAT */}
-                    <div className="bg-white dark:bg-[#1E272E] p-8 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 transition-colors">
-                        <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-100 dark:border-gray-800">
-                            <div>
-                                <h4 className="text-base font-extrabold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                                    <span className="w-2.5 h-6 bg-[#F6A84B] rounded-full"></span> Rincian Item Obat Masuk
-                                </h4>
-                                <p className="text-xs text-gray-400 mt-1">Masukkan nomor batch dan tanggal kadaluarsa (minimal 6 bulan ke depan dari hari ini).</p>
-                            </div>
-                            <button type="button" onClick={addItem} className="px-5 py-2.5 bg-[#EAF5F0] text-[#246A55] dark:bg-[#253939] dark:text-[#67E2B4] rounded-2xl text-xs font-extrabold hover:bg-[#48CFA4] hover:text-white transition-all shadow-sm flex items-center gap-2 cursor-pointer">
-                                + Tambah Baris Obat
-                            </button>
-                        </div>
-                        
-                        <div className="overflow-x-auto pb-2">
-                            <table className="w-full text-sm text-left min-w-[950px]">
-                                <thead className="text-[11px] text-gray-400 dark:text-gray-400 uppercase bg-gray-50/70 dark:bg-[#151E24] tracking-wider">
-                                    <tr>
-                                        <th className="px-4 py-3.5 rounded-l-xl w-[26%]">Pilih Obat Master</th>
-                                        <th className="px-4 py-3.5 w-[16%]">No. Batch Pabrik</th>
-                                        <th className="px-4 py-3.5 w-[16%]">Expired Date (Min. 6 Bln)</th>
-                                        <th className="px-4 py-3.5 w-[18%] text-center">Jumlah & Satuan</th>
-                                        <th className="px-4 py-3.5 w-[14%]">Harga Beli</th>
-                                        <th className="px-4 py-3.5 w-[10%] text-right">Subtotal</th>
-                                        <th className="px-2 py-3.5 rounded-r-xl text-center w-12">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
-                                    {data.items.map((item, index) => (
-                                        <tr key={index} className="hover:bg-gray-50/30 dark:hover:bg-gray-800/10 transition-colors align-top">
-                                            <td className="px-2 py-3">
-                                                <select value={item.medicine_id} onChange={e => handleItemChange(index, 'medicine_id', e.target.value)} required className="w-full text-xs px-3 py-2.5 bg-gray-50/50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-xl focus:border-[#48CFA4] text-gray-900 dark:text-gray-100 font-medium">
-                                                    <option value="">-- Cari Obat --</option>
-                                                    {medicines.map(med => <option key={med.id} value={med.id}>{med.sku} — {med.name}</option>)}
-                                                </select>
-                                                <InputError message={errors[`items.${index}.medicine_id`]} className="mt-1" />
-                                            </td>
-                                            <td className="px-2 py-3">
-                                                <input type="text" value={item.batch_number} onChange={e => handleItemChange(index, 'batch_number', e.target.value)} required placeholder="Cth: BATCH001" className="w-full text-xs px-3 py-2.5 bg-gray-50/50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-xl focus:border-[#48CFA4] text-gray-900 dark:text-gray-100 uppercase font-mono" />
-                                                <InputError message={errors[`items.${index}.batch_number`]} className="mt-1" />
-                                            </td>
-                                            <td className="px-2 py-3">
-                                                <input type="date" value={item.expired_date} onChange={e => handleItemChange(index, 'expired_date', e.target.value)} required className="w-full text-xs px-3 py-2.5 bg-gray-50/50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-xl focus:border-[#48CFA4] text-gray-900 dark:text-gray-100 font-medium" />
-                                                <InputError message={errors[`items.${index}.expired_date`]} className="mt-1" />
-                                            </td>
-                                            <td className="px-2 py-3">
-                                                <div className="flex gap-2">
-                                                    <input type="number" min="1" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', e.target.value)} required className="w-16 text-xs text-center px-2 py-2.5 bg-gray-50/50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-xl focus:border-[#48CFA4] text-gray-900 dark:text-gray-100 font-bold" />
-                                                    <select value={item.uom} onChange={e => handleItemChange(index, 'uom', e.target.value)} className="w-full text-xs px-2 py-2.5 bg-gray-50/50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-xl focus:border-[#48CFA4] text-gray-900 dark:text-gray-100 font-medium">
-                                                        <option value="Tablet">Tablet</option>
-                                                        <option value="Strip">Strip</option>
-                                                        <option value="Box">Box</option>
-                                                        <option value="Botol">Botol</option>
-                                                        <option value="Ampul">Ampul</option>
-                                                        <option value="Pcs">Pcs</option>
-                                                    </select>
-                                                </div>
-                                                <InputError message={errors[`items.${index}.quantity`]} className="mt-1" />
-                                            </td>
-                                            <td className="px-2 py-3">
-                                                <div className="relative">
-                                                    <span className="absolute left-3 top-2.5 text-gray-400 text-xs">Rp</span>
-                                                    <input type="number" min="0" value={item.purchase_price} onChange={e => handleItemChange(index, 'purchase_price', e.target.value)} required className="w-full text-xs pl-8 pr-3 py-2.5 bg-gray-50/50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-xl focus:border-[#48CFA4] text-gray-900 dark:text-gray-100 font-mono font-bold" />
-                                                </div>
-                                                <InputError message={errors[`items.${index}.purchase_price`]} className="mt-1" />
-                                            </td>
-                                            <td className="px-2 py-3 text-right font-mono font-bold text-[#48CFA4]">
-                                                {formatRupiah(item.subtotal)}
-                                            </td>
-                                            <td className="px-2 py-3 text-center">
-                                                <button type="button" onClick={() => removeItem(index)} disabled={data.items.length === 1} className="p-2 text-red-400 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-20 transition-colors cursor-pointer">
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {/* CATATAN & TOTAL KESELURUHAN */}
-                        <div className="mt-8 flex flex-col md:flex-row justify-between items-end border-t border-gray-100 dark:border-gray-800 pt-6">
-                            <div className="w-full md:w-1/2 mb-6 md:mb-0">
-                                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">Catatan Keterangan Faktur</label>
-                                <textarea value={data.notes} onChange={e => setData('notes', e.target.value)} rows="3" className="w-full px-4 py-3 bg-gray-50/50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-2xl focus:border-[#48CFA4] text-gray-900 dark:text-gray-100 text-sm" placeholder="Tuliskan catatan khusus atau diskon dari distributor jika ada..."></textarea>
-                                <InputError message={errors.notes} className="mt-2" />
-                            </div>
-                            
-                            <div className="text-right w-full md:w-auto bg-gray-50 dark:bg-[#151E24] p-6 rounded-2xl border border-gray-100 dark:border-gray-800">
-                                <p className="text-xs font-extrabold uppercase tracking-wider text-gray-400 mb-1">Total Nilai Faktur:</p>
-                                <h2 className="text-3xl font-black text-gray-900 dark:text-gray-100 mb-6 font-mono">
-                                    {formatRupiah(data.total_amount)}
-                                </h2>
-                                
-                                <div className="flex justify-end gap-3">
-                                    <Link href={route('purchases.index')} className="px-6 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-2xl text-sm font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Batal</Link>
-                                    <PrimaryButton type="submit" disabled={processing || data.items.length === 0} className="px-8 py-3 text-sm shadow-lg shadow-[#48CFA4]/20 rounded-2xl cursor-pointer">
-                                        {processing ? 'Menyimpan...' : 'Simpan & Cetak BPB'}
-                                    </PrimaryButton>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <PurchaseItemsTable
+                        data={data}
+                        setData={setData}
+                        errors={errors}
+                        medicineList={medicineList}
+                        onAddItem={addItem}
+                        onRemoveItem={removeItem}
+                        onItemChange={handleItemChange}
+                        onOpenQuickAddMedicineModal={openQuickAddMedicineModal}
+                        isGeneratingNote={isGeneratingNote}
+                        onGenerateAutoNotes={handleGenerateAutoNotes}
+                        formatRupiah={formatRupiah}
+                        processing={processing}
+                    />
                 </form>
             </div>
+
+            <PurchaseModals
+                isQuickAddSupplierModalOpen={isQuickAddSupplierModalOpen}
+                onCloseQuickAddSupplierModal={() => setIsQuickAddSupplierModalOpen(false)}
+                quickSupplierForm={quickSupplierForm}
+                setQuickSupplierForm={setQuickSupplierForm}
+                supplierTypes={supplierTypes}
+                onSaveQuickSupplier={handleSaveQuickSupplier}
+                isSavingSupplier={isSavingSupplier}
+                isQuickAddMedicineModalOpen={isQuickAddMedicineModalOpen}
+                onCloseQuickAddMedicineModal={() => setIsQuickAddMedicineModalOpen(false)}
+                quickMedicineForm={quickMedicineForm}
+                setQuickMedicineForm={setQuickMedicineForm}
+                categories={categories}
+                supplierList={supplierList}
+                racks={racks}
+                onSaveQuickMedicine={handleSaveQuickMedicine}
+                isSavingMedicine={isSavingMedicine}
+                isPreviewModalOpen={isPreviewModalOpen}
+                onClosePreviewModal={() => setIsPreviewModalOpen(false)}
+                previewUrl={previewUrl}
+            />
         </AuthenticatedLayout>
     );
 }

@@ -118,4 +118,46 @@ class ProductController extends Controller
 
         return redirect()->route('products.index')->with('success', 'Perubahan Master Obat berhasil disimpan.');
     }
+
+    public function quickStore(Request $request)
+    {
+        if (!$request->filled('sku')) {
+            $request->merge(['sku' => 'MED-' . date('Ym') . '-' . strtoupper(Str::random(4))]);
+        }
+
+        $validated = $request->validate([
+            'sku'                   => 'required|string|unique:medicines,sku',
+            'barcode'               => 'nullable|string|unique:medicines,barcode',
+            'name'                  => 'required|string|max:255',
+            'generic_name'          => 'nullable|string|max:255',
+            'medicine_category_id'  => 'required|exists:medicine_categories,id',
+            'supplier_id'           => 'nullable|exists:suppliers,id',
+            'rack_id'               => 'nullable|exists:racks,id',
+            'dosage_form'           => 'nullable|string|max:100',
+            'dosage_strength'       => 'nullable|string|max:100',
+            'requires_prescription' => 'boolean',
+            'base_unit'             => 'required|string|max:50',
+            'selling_price'         => 'required|numeric|min:0',
+            'min_stock'             => 'required|integer|min:0',
+            'max_stock'             => 'nullable|integer|min:0',
+            'is_active'             => 'boolean',
+        ]);
+
+        $validated['sku'] = strtoupper($validated['sku']);
+        $validated['is_active'] = $validated['is_active'] ?? true;
+
+        $medicine = Medicine::create($validated);
+
+        AuditLog::record('inventaris', 'CREATE', "Menambahkan master obat baru (Quick Add via Faktur): {$medicine->name}");
+
+        return response()->json([
+            'message'  => "Obat {$medicine->name} ({$medicine->sku}) berhasil ditambahkan ke Katalog Obat!",
+            'medicine' => [
+                'id'        => $medicine->id,
+                'name'      => $medicine->name,
+                'sku'       => $medicine->sku,
+                'base_unit' => $medicine->base_unit,
+            ]
+        ]);
+    }
 }

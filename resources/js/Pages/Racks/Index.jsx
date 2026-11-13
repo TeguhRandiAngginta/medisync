@@ -34,7 +34,10 @@ export default function Index({ racks }) {
                 setIsDeleting(false);
                 setIsModalOpen(false);
             },
-            onError: () => setIsDeleting(false),
+            onError: () => {
+                setIsDeleting(false);
+                setIsModalOpen(false);
+            },
         });
     };
 
