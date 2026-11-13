@@ -7,7 +7,7 @@ use App\Models\AuditLog;
 use App\Models\SupplierType;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-
+    
 class SupplierController extends Controller
 {
     public function index()
@@ -74,10 +74,44 @@ class SupplierController extends Controller
 
     public function destroy(Supplier $supplier)
     {
+        $purchaseCount = \App\Models\Purchase::where('supplier_id', $supplier->id)->count();
+        $medicineCount = \App\Models\Medicine::where('supplier_id', $supplier->id)->count();
+
+        if ($purchaseCount > 0 || $medicineCount > 0) {
+            return back()->withErrors([
+                'message' => "Aksi Ditolak: Pemasok '{$supplier->name}' tidak boleh dihapus karena sudah terhubung dengan {$purchaseCount} Faktur Pembelian dan {$medicineCount} Katalog Obat. (Solusi: Edit pemasok ini dan ubah statusnya menjadi Nonaktif)."
+            ]);
+        }
+
         $supplierName = $supplier->name;
         $supplier->delete();
 
         AuditLog::record('supplier', 'DELETE', "Menghapus data pemasok: {$supplierName}");
         return redirect()->route('suppliers.index')->with('success', "Data Pemasok {$supplierName} berhasil dihapus permanen.");
+    }
+
+    public function quickStore(Request $request)
+    {
+        $validated = $request->validate([
+            'supplier_type_id' => 'required|exists:supplier_types,id',
+            'code'             => 'required|string|max:50|unique:suppliers,code',
+            'name'             => 'required|string|max:255',
+            'contact_person'   => 'nullable|string|max:255',
+            'phone'            => 'nullable|string|max:50',
+            'email'            => 'nullable|email|max:255',
+            'address'          => 'nullable|string',
+        ]);
+
+        $validated['code'] = strtoupper($validated['code']);
+        $validated['is_active'] = true;
+
+        $supplier = Supplier::create($validated);
+
+        AuditLog::record('supplier', 'CREATE', "Menambahkan pemasok baru (Quick Add via Faktur): {$supplier->name}");
+
+        return response()->json([
+            'message'  => "Supplier {$supplier->name} ({$supplier->code}) berhasil ditambahkan!",
+            'supplier' => $supplier
+        ]);
     }
 }

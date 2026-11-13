@@ -45,7 +45,7 @@ class RackController extends Controller
 
         AuditLog::record('rak', 'CREATE', "Menambahkan lokasi rak baru: {$rack->name} ({$rack->code})");
 
-        return redirect()->route('racks.index');
+        return redirect()->route('racks.index')->with('success', "Lokasi rak {$rack->name} ({$rack->code}) berhasil ditambahkan!");
     }
 
     public function edit(Rack $rack)
@@ -56,7 +56,7 @@ class RackController extends Controller
         ]);
     }
 
-    public function update(Request $request, Rack $rack)
+        public function update(Request $request, Rack $rack)
     {
         $validated = $request->validate([
             'location_type_id' => 'required|exists:location_types,id',
@@ -77,16 +77,27 @@ class RackController extends Controller
 
         AuditLog::record('rak', 'UPDATE', "Memperbarui data lokasi rak: {$rack->name}");
 
-        return redirect()->route('racks.index');
+        return redirect()->route('racks.index')->with('success', "Data lokasi rak {$rack->name} berhasil diperbarui!");
     }
 
     public function destroy(Rack $rack)
     {
+        $medicineCount = \App\Models\Medicine::where('rack_id', $rack->id)->count();
+        $batchCount = \Illuminate\Support\Facades\Schema::hasColumn('product_batches', 'rack_id')
+            ? \App\Models\ProductBatch::withTrashed()->where('rack_id', $rack->id)->count()
+            : 0;
+
+        if ($medicineCount > 0 || $batchCount > 0) {
+            return back()->withErrors([
+                'message' => "Aksi Ditolak: Lokasi rak '{$rack->name}' tidak boleh dihapus karena sedang digunakan oleh {$medicineCount} Katalog Obat. (Solusi: Edit lokasi ini dan ubah statusnya menjadi Nonaktif)."
+            ]);
+        }
+
         $rackName = $rack->name;
         $rack->delete();
 
         AuditLog::record('rak', 'DELETE', "Menghapus lokasi rak: {$rackName}");
 
-        return redirect()->route('racks.index');
+        return redirect()->route('racks.index')->with('success', "Lokasi rak {$rackName} berhasil dihapus permanen.");
     }
 }

@@ -61,7 +61,7 @@ export default function Create({ medicines }) {
             });
         }
 
-        const cacheKey = `medisync_ocr_cache_${file.name}_${file.size}`;
+        const cacheKey = `medisync_ocr_cache_v2_${file.name}_${file.size}`;
         const cachedData = localStorage.getItem(cacheKey);
 
         if (cachedData) {
@@ -93,14 +93,26 @@ export default function Create({ medicines }) {
                     throw new Error("Kunci VITE_GEMINI_API_KEY belum dipasang di file .env!");
                 }
 
-                const prompt = `Anda adalah sistem OCR apotek. Analisis resep dokter terlampir. 
-                Daftar HANYA nama obat utama yang ada di stok kami (Abaikan dosis/mg): ${JSON.stringify(medicines.map(m => m.name.split(' ')[0]))}.
+                const prompt = `Anda adalah sistem OCR apotek profesional. Analisis resep dokter terlampir (termasuk tulisan tangan medis atau bahasa Latin/asing).
+                Daftar nama obat utama di katalog stok kami: ${JSON.stringify(medicines.map(m => m.name.split(' ')[0]))}.
                 
                 Tugas Anda:
-                1. Ekstrak patient_name, doctor_name, prescription_date.
-                2. Ekstrak daftar obat ke format JSON: [{name, quantity, signa}]. 
-                PENTING: Di field "name", berikan HANYA nama kandungan aktif/merk utama (misal: "Paracetamol", BUKAN "Parasetamol tab 500 mg").
-                KEMBALIKAN HANYA FORMAT JSON MENTAH TANPA MARKDOWN.`;
+                1. Ekstrak "patient_name", "doctor_name", dan "prescription_date" (WAJIB ubah ke format standar YYYY-MM-DD, misalnya "18. II. 33" menjadi "1933-02-18". Jika tidak ada atau tidak jelas, gunakan tanggal hari ini).
+                2. Ekstrak SEMUA baris obat/bahan aktif yang tertulis setelah tanda Rp./R/ ke dalam array "items".
+                
+                KEMBALIKAN HANYA OBJECT JSON MURNI DENGAN STRUKTUR PERSIS SEPERTI INI (TANPA MARKDOWN):
+                {
+                    "patient_name": "nama pasien",
+                    "doctor_name": "nama dokter",
+                    "prescription_date": "YYYY-MM-DD",
+                    "items": [
+                        {
+                            "name": "nama obat/bahan aktif utama (contoh: Kali jodati, Pilocarpini, Paracetamol)",
+                            "quantity": 1,
+                            "signa": "aturan pakai jika ada (contoh: Oculi kapky / 3 x 1)"
+                        }
+                    ]
+                }`;
 
                 let parsedData = null;
                 let usedModelName = '';
@@ -196,18 +208,20 @@ export default function Create({ medicines }) {
     const processAiResult = (parsedData) => {
         let autoItems = [];
         let notFoundItems = [];
+        const rawItems = parsedData.items || parsedData.medicines || parsedData.obat || [];
 
-        if (parsedData.items && parsedData.items.length > 0) {
-            parsedData.items.forEach(aiItem => {
+        if (Array.isArray(rawItems) && rawItems.length > 0) {
+            rawItems.forEach(aiItem => {
                 const rawName = (aiItem.name || aiItem.medicine_name || '').trim();
+                if (!rawName) return;
+
                 const firstWordMatch = rawName.split(' ')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
                 
-                const matchedMed = medicines.find(m => {
+                const matchedMed = firstWordMatch.length >= 3 ? medicines.find(m => {
                     const mNameWord = m.name.split(' ')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
                     return mNameWord === firstWordMatch || 
-                            mNameWord.includes(firstWordMatch) || 
-                            firstWordMatch.includes(mNameWord);
-                });
+                            (mNameWord.length >= 3 && (mNameWord.includes(firstWordMatch) || firstWordMatch.includes(mNameWord)));
+                }) : null;
 
                 if (matchedMed) {
                     autoItems.push({
@@ -218,13 +232,13 @@ export default function Create({ medicines }) {
                         quantity: parseInt(aiItem.quantity) || 1,
                         signa: aiItem.signa || '3 x 1 Tablet Sesudah Makan'
                     });
-                } else if (rawName) {
+                } else {
                     notFoundItems.push(`${rawName} (Qty: ${aiItem.quantity || 1}, Signa: ${aiItem.signa || '-'})`);
                 }
             });
         }
 
-        setUnmatchedMedicines([...notFoundItems]); // Pastikan array baru untuk trigger re-render
+        setUnmatchedMedicines([...notFoundItems]);
 
         let warningText = '';
         if (notFoundItems.length > 0) {
@@ -233,14 +247,16 @@ export default function Create({ medicines }) {
 
         const existingNotes = parsedData.notes || data.notes || '';
         const finalNotes = warningText 
-            ? (existingNotes ? existingNotes + "\n\n" + warningText : warningText)
+            ? (existingNotes && !existingNotes.includes("PERINGATAN SISTEM") ? existingNotes + "\n\n" + warningText : warningText)
             : existingNotes;
+
+        const isValidDate = /^\d{4}-\d{2}-\d{2}$/.test(parsedData.prescription_date || '');
 
         setData(prev => ({
             ...prev,
             patient_name: parsedData.patient_name || prev.patient_name,
             doctor_name: parsedData.doctor_name ? formatDoctorName(parsedData.doctor_name) : prev.doctor_name,
-            prescription_date: parsedData.prescription_date || prev.prescription_date,
+            prescription_date: isValidDate ? parsedData.prescription_date : prev.prescription_date,
             notes: finalNotes,
             items: autoItems.length > 0 ? autoItems : prev.items
         }));

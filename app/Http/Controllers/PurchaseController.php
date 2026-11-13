@@ -8,6 +8,7 @@ use App\Models\Supplier;
 use App\Models\Medicine;
 use App\Models\AuditLog;
 use App\Models\ProductBatch;
+use App\Services\GoogleAIService;
 use App\Services\InventoryService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -43,8 +44,11 @@ class PurchaseController extends Controller
     public function create()
     {
         return Inertia::render('Purchases/Create', [
-            'suppliers' => Supplier::where('is_active', true)->get(),
-            'medicines' => Medicine::select('id', 'name', 'sku', 'base_unit')->get(),
+            'suppliers'     => Supplier::where('is_active', true)->get(),
+            'medicines'     => Medicine::select('id', 'name', 'sku', 'base_unit')->get(),
+            'supplierTypes' => \App\Models\SupplierType::all(),
+            'categories'    => \App\Models\MedicineCategory::where('is_active', true)->get(),
+            'racks'         => \App\Models\Rack::where('is_active', true)->get(),
         ]);
     }
 
@@ -124,6 +128,31 @@ class PurchaseController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['message' => 'Gagal menyimpan transaksi: ' . $e->getMessage()]);
+        }
+    }
+
+    public function scanInvoice(Request $request)
+    {
+        $request->validate([
+            'invoice_image' => 'required|string', 
+            'mime_type' => 'required|string'
+        ]);
+
+        $prompt = 'Ekstrak data faktur obat ini. Kembalikan HANYA format JSON valid tanpa markdown seperti ini: {"invoice_number": "INV-123", "purchase_date": "YYYY-MM-DD", "items": [{"medicine_name": "Panadol", "quantity": 10, "uom": "Strip", "purchase_price": 5000, "batch_number": "B001", "expired_date": "YYYY-MM-DD"}]}';
+
+        try {
+            $base64Image = preg_replace('#^data:image/\w+;base64,#i', '', $request->invoice_image);
+            $aiResponse = GoogleAIService::analyzePrescriptionImage($base64Image, $request->mime_type, $prompt);
+            
+            $result = $aiResponse;
+            if (isset($aiResponse['raw_text'])) {
+                $cleaned = preg_replace('/```json|```/', '', $aiResponse['raw_text']);
+                $result = json_decode(trim($cleaned), true);
+            }
+
+            return response()->json($result);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Gagal membaca faktur: ' . $e->getMessage()], 500);
         }
     }
 

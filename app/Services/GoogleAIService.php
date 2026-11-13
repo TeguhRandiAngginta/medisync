@@ -7,30 +7,29 @@ use Illuminate\Support\Facades\Log;
 
 class GoogleAIService
 {
-    /**
-     * Mengirim konten ke Google AI Studio dengan sistem Automatic Fallback kilat.
-     */
     public static function generateContent(string $prompt, ?string $base64Image = null, ?string $mimeType = null, ?string $model = null): array
     {
-        $apiKey = config('services.google_ai.api_key');
+        $apiKey = trim(config('services.google_ai.api_key'));
 
         if (empty($apiKey)) {
             throw new \Exception('GEMINI_API_KEY belum dikonfigurasi pada file .env');
         }
 
-        // Gunakan nama model resmi yang valid dan didukung oleh Google AI Studio API
-        $fallbackModels = $model ? [$model] : [
-            'gemini-1.5-flash', // Model paling stabil, cepat, dan akurat untuk OCR gambar
-            'gemini-1.5-pro',   // Cadangan tingkat lanjut
-            'gemini-2.0-flash'  // Cadangan alternatif terbaru jika ada
+        $fallbackModels = $model ? [trim($model)] : [
+            'gemini-1.5-flash',
+            'gemini-1.5-pro', 
+            'gemini-2.0-flash' ,
+            'gemini-2.5-flash',
+            'gemini-3.8-flash'
         ];
 
         $parts = [];
         if (!empty($base64Image) && !empty($mimeType)) {
+            $cleanBase64 = preg_replace('#^data:image/\w+;base64,#i', '', $base64Image);
             $parts[] = [
                 'inline_data' => [
                     'mime_type' => $mimeType,
-                    'data'      => $base64Image
+                    'data'      => trim($cleanBase64)
                 ]
             ];
         }
@@ -39,10 +38,11 @@ class GoogleAIService
         $lastException = null;
 
         foreach ($fallbackModels as $targetModel) {
-            $endpoint = "https://generativelanguage.googleapis.com/v1beta/models/{$targetModel}:generateContent?key=" . $apiKey;
+            $cleanModel = trim($targetModel);
+            $endpoint = "https://generativelanguage.googleapis.com/v1beta/models/{$cleanModel}:generateContent?key=" . $apiKey;
 
             try {
-                $response = Http::timeout(15)
+                $response = Http::timeout(25)
                     ->withHeaders(['Content-Type' => 'application/json'])
                     ->post($endpoint, [
                         'contents' => [
@@ -55,19 +55,25 @@ class GoogleAIService
                         ]
                     ]);
 
-                // Jika sukses (2xx), langsung kembalikan hasil
                 if ($response->successful()) {
                     $responseData = $response->json();
                     $jsonText = $responseData['candidates'][0]['content']['parts'][0]['text'] ?? '{}';
                     
-                    return json_decode($jsonText, true) ?? ['raw_text' => $jsonText];
+                    $cleanedText = preg_replace('/```json\s*|\s*```/', '', $jsonText);
+                    $decoded = json_decode(trim($cleanedText), true);
+                    
+                    if (json_last_error() === JSON_ERROR_NONE) {
+                        return is_array($decoded) ? $decoded : ['raw_text' => $jsonText];
+                    }
+
+                    return ['raw_text' => $jsonText];
                 }
 
-                Log::warning("Model [{$targetModel}] merespons status {$response->status()}. Berpindah ke model cadangan...");
-                $lastException = new \Exception("Model {$targetModel} error: " . $response->body());
+                Log::warning("Model [{$cleanModel}] merespons status {$response->status()}. Berpindah...");
+                $lastException = new \Exception("Model {$cleanModel} error: " . $response->body());
 
             } catch (\Exception $e) {
-                Log::warning("Koneksi ke model [{$targetModel}] gagal/timeout. Berpindah...");
+                Log::warning("Koneksi ke model [{$cleanModel}] gagal: " . $e->getMessage());
                 $lastException = $e;
             }
         }

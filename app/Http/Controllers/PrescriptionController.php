@@ -110,6 +110,15 @@ class PrescriptionController extends Controller
         return response()->json($prescription);
     }
 
+    public function getDraftsForPos()
+    {
+        $drafts = Prescription::where('status', 'DRAFT')
+            ->orderBy('created_at', 'asc')
+            ->get(['id', 'prescription_number', 'patient_name', 'doctor_name', 'created_at']);
+
+        return response()->json($drafts);
+    }
+
     public function analyzeImage(Request $request)
     {
         try {

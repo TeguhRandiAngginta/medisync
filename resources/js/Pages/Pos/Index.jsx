@@ -18,16 +18,17 @@ export default function Index({ medicines, activeShift }) {
     const [payments, setPayments] = useState({ cash: 0, qris: 0, transfer: 0 });
     const [isProcessing, setIsProcessing] = useState(false);
 
+    // === CUSTOM MODAL ALERT (Menggantikan alert bawaan browser) ===
+    const [customAlert, setCustomAlert] = useState({ show: false, message: '', type: 'error' });
+
     // === STATE MODAL & RESEP ===
     const [showSimulationModal, setShowSimulationModal] = useState(false);
     const [simulationType, setSimulationType] = useState('');
     const [completedSale, setCompletedSale] = useState(null);
     const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
-    const [prescriptionNumber, setPrescriptionNumber] = useState('');
-    const [prescriptionError, setPrescriptionError] = useState('');
     const [isFetchingPrescription, setIsFetchingPrescription] = useState(false);
-
     const [activePrescriptionId, setActivePrescriptionId] = useState(null);
+
     const openShiftForm = useForm({
         opening_amount: ''
     });
@@ -37,7 +38,6 @@ export default function Index({ medicines, activeShift }) {
         openShiftForm.post(route('pos.shift.open'));
     };
 
-    // === PERHITUNGAN & FILTER ===
     const formatRupiah = (number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number || 0);
 
     useEffect(() => {
@@ -53,7 +53,7 @@ export default function Index({ medicines, activeShift }) {
             } catch (error) {
                 console.error("Gagal mengambil data obat", error);
             }
-        }, 300); // 300ms debounce
+        }, 300);
 
         return () => clearTimeout(timer);
     }, [searchQuery, medicines]);
@@ -70,7 +70,7 @@ export default function Index({ medicines, activeShift }) {
             if (existingItem.quantity < medicine.stock) {
                 setCart(cart.map(item => item.medicine_id === medicine.id ? { ...item, quantity: item.quantity + 1 } : item));
             } else {
-                alert(`Stok ${medicine.name} tidak mencukupi!`);
+                setCustomAlert({ show: true, message: `Stok ${medicine.name} tidak mencukupi!`, type: 'error' });
             }
         } else {
             if (medicine.stock > 0) {
@@ -80,7 +80,7 @@ export default function Index({ medicines, activeShift }) {
                     price: Number(medicine.selling_price), max_stock: medicine.stock
                 }]);
             } else {
-                alert(`Stok ${medicine.name} kosong!`);
+                setCustomAlert({ show: true, message: `Stok ${medicine.name} kosong!`, type: 'error' });
             }
         }
     };
@@ -93,33 +93,44 @@ export default function Index({ medicines, activeShift }) {
 
     const removeFromCart = (id) => setCart(cart.filter(item => item.medicine_id !== id));
 
-    const handlePullPrescription = async () => {
-        if (!prescriptionNumber) return;
+    const handlePullPrescription = async (selectedNumber) => {
+        if (!selectedNumber) return;
         setIsFetchingPrescription(true);
-        setPrescriptionError('');
 
         try {
-            const response = await axios.get(`/api/prescriptions/${prescriptionNumber}`);
+            const response = await axios.get(route('api.prescriptions.get', selectedNumber));
             const data = response.data;
 
-            setActivePrescriptionId(data.id);
-
             const newCartItems = data.items.map(item => ({
-                medicine_id: item.medicine_id,
+                medicine_id: item.medicine.id,
+                id: item.medicine.id,
                 name: item.medicine.name,
-                sku: item.medicine.sku,
-                base_unit: item.medicine.base_unit,
+                price: item.medicine.selling_price,
                 quantity: item.quantity,
-                price: Number(item.medicine.selling_price),
-                max_stock: item.medicine.stock || 999,
-                signa: item.signa
+                max_stock: item.medicine.stock,
+                signa: item.signa,
+                base_unit: item.medicine.base_unit
             }));
 
-            setCart([...cart, ...newCartItems]);
+            setCart(prevCart => {
+                const combined = [...prevCart];
+                newCartItems.forEach(newItem => {
+                    const existingIndex = combined.findIndex(i => i.medicine_id === newItem.medicine_id);
+                    if (existingIndex >= 0) {
+                        combined[existingIndex].quantity += newItem.quantity;
+                        combined[existingIndex].signa = newItem.signa; 
+                    } else {
+                        combined.push(newItem);
+                    }
+                });
+                return combined;
+            });
+
+            setActivePrescriptionId(data.id);
             setIsPrescriptionModalOpen(false);
-            setPrescriptionNumber('');
+            
         } catch (error) {
-            setPrescriptionError(error.response?.data?.message || 'Gagal menarik resep. Pastikan nomor benar.');
+            setCustomAlert({ show: true, message: error.response?.data?.message || 'Gagal mencari data resep.', type: 'error' });
         } finally {
             setIsFetchingPrescription(false);
         }
@@ -272,7 +283,6 @@ export default function Index({ medicines, activeShift }) {
             ) : (
                 <>
                     <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-140px)]">
-                        {/* KOMPONEN KIRI (PRODUK) */}
                         <ProductList 
                             searchQuery={searchQuery}
                             setSearchQuery={setSearchQuery}
@@ -281,7 +291,6 @@ export default function Index({ medicines, activeShift }) {
                             setIsPrescriptionModalOpen={setIsPrescriptionModalOpen}
                         />
 
-                        {/* KOMPONEN KANAN (KERANJANG) */}
                         <CartSidebar 
                             cart={cart}
                             removeFromCart={removeFromCart}
@@ -300,10 +309,6 @@ export default function Index({ medicines, activeShift }) {
                     <PrescriptionModal 
                         isOpen={isPrescriptionModalOpen}
                         onClose={() => setIsPrescriptionModalOpen(false)}
-                        prescriptionNumber={prescriptionNumber}
-                        setPrescriptionNumber={setPrescriptionNumber}
-                        prescriptionError={prescriptionError}
-                        setPrescriptionError={setPrescriptionError}
                         isFetchingPrescription={isFetchingPrescription}
                         handlePullPrescription={handlePullPrescription}
                     />

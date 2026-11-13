@@ -27,6 +27,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/pos/shift/open', [App\Http\Controllers\CashRegisterController::class, 'openShift'])->name('pos.shift.open');
     Route::post('/pos/shift/close', [App\Http\Controllers\CashRegisterController::class, 'closeShift'])->name('pos.shift.close');
     Route::get('/api/pos/medicines', [App\Http\Controllers\PosController::class, 'searchMedicines'])->name('api.pos.medicines');
+    Route::post('/api/pos/smart-search', [App\Http\Controllers\PosController::class, 'smartSearch'])->name('api.pos.smart-search');
     Route::post('/pos', [App\Http\Controllers\PosController::class, 'store'])->name('pos.store');
     Route::get('/pos/receipt/{invoice}', [App\Http\Controllers\PosController::class, 'printReceipt'])->name('pos.receipt');
     
@@ -41,10 +42,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     
     // Prescriptions & OCR
     Route::post('/api/prescriptions/analyze', [PrescriptionController::class, 'analyzeImage'])->middleware('throttle:10,1')->name('api.prescriptions.analyze');
+    Route::get('/api/prescriptions-drafts', [PrescriptionController::class, 'getDraftsForPos'])->name('api.prescriptions.drafts');
     Route::get('/api/prescriptions/{number}', [PrescriptionController::class, 'getForPos'])->name('api.prescriptions.get');
     Route::resource('prescriptions', PrescriptionController::class)->except(['show', 'edit', 'update']);
     Route::get('/prescriptions/{prescription}/edit', [PrescriptionController::class, 'edit'])->name('prescriptions.edit');
     Route::put('/prescriptions/{prescription}', [PrescriptionController::class, 'update'])->name('prescriptions.update');
+
 });
 
 // Akses Terbatas (Pembelian, Produk, Supplier, Batch FEFO)
@@ -55,11 +58,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('purchases/{purchase}/print', [PurchaseController::class, 'printPdf'])->name('purchases.print');
 
     Route::post('/purchases/bulk-destroy', [PurchaseController::class, 'bulkDestroy'])->name('purchases.bulk-destroy');
+    Route::post('/api/purchases/scan-invoice', [PurchaseController::class, 'scanInvoice'])->name('api.purchases.scan');
     Route::resource('purchases', PurchaseController::class);
 
     Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
+    Route::post('/api/products/quick-store', [ProductController::class, 'quickStore'])->name('api.products.quick-store');
     Route::resource('products', ProductController::class);
 
+    Route::post('/api/suppliers/quick-store', [App\Http\Controllers\SupplierController::class, 'quickStore'])->name('api.suppliers.quick-store');
     Route::resource('suppliers', App\Http\Controllers\SupplierController::class);
     Route::resource('racks', App\Http\Controllers\RackController::class);
 
