@@ -67,7 +67,16 @@ Route::middleware(['auth', 'verified', 'role:superadmin,apoteker'])->group(funct
     Route::resource('products', ProductController::class);
 
     Route::post('/api/suppliers/quick-store', [App\Http\Controllers\SupplierController::class, 'quickStore'])->name('api.suppliers.quick-store');
+    Route::post('/suppliers/bulk-destroy', [App\Http\Controllers\SupplierController::class, 'bulkDestroy'])->name('suppliers.bulk-destroy');
+    Route::post('/suppliers/bulk-restore', [App\Http\Controllers\SupplierController::class, 'bulkRestore'])->name('suppliers.bulk-restore');
+    Route::post('/suppliers/{id}/restore', [App\Http\Controllers\SupplierController::class, 'restore'])->name('suppliers.restore');
+    Route::delete('/suppliers/{id}/force-delete', [App\Http\Controllers\SupplierController::class, 'forceDelete'])->name('suppliers.force-delete');
     Route::resource('suppliers', App\Http\Controllers\SupplierController::class);
+
+    Route::post('/racks/bulk-destroy', [App\Http\Controllers\RackController::class, 'bulkDestroy'])->name('racks.bulk-destroy');
+    Route::post('/racks/bulk-restore', [App\Http\Controllers\RackController::class, 'bulkRestore'])->name('racks.bulk-restore');
+    Route::post('/racks/{id}/restore', [App\Http\Controllers\RackController::class, 'restore'])->name('racks.restore');
+    Route::delete('/racks/{id}/force-delete', [App\Http\Controllers\RackController::class, 'forceDelete'])->name('racks.force-delete');
     Route::resource('racks', App\Http\Controllers\RackController::class);
 
     Route::get('/product-batches', [PurchaseController::class, 'batchesIndex'])->name('batches.index');
@@ -82,17 +91,33 @@ Route::middleware(['auth', 'verified', 'role:superadmin'])->group(function () {
     Route::get('/audit-logs', [App\Http\Controllers\AuditLogController::class, 'index'])->name('audit-logs.index');
 
     Route::get('/references', [App\Http\Controllers\ReferenceController::class, 'index'])->name('references.index');
+
+    // Location Types (dengan SoftDeletes)
     Route::post('/references/location-types', [App\Http\Controllers\ReferenceController::class, 'storeLocationType'])->name('references.location-types.store');
     Route::put('/references/location-types/{locationType}', [App\Http\Controllers\ReferenceController::class, 'updateLocationType'])->name('references.location-types.update');
     Route::delete('/references/location-types/{locationType}', [App\Http\Controllers\ReferenceController::class, 'destroyLocationType'])->name('references.location-types.destroy');
+    Route::post('/references/location-types/{id}/restore', [App\Http\Controllers\ReferenceController::class, 'restoreLocationType'])->name('references.location-types.restore');
+    Route::delete('/references/location-types/{id}/force-delete', [App\Http\Controllers\ReferenceController::class, 'forceDeleteLocationType'])->name('references.location-types.force-delete');
+    Route::post('/references/location-types/bulk-destroy', [App\Http\Controllers\ReferenceController::class, 'bulkDestroyLocationType'])->name('references.location-types.bulk-destroy');
+    Route::post('/references/location-types/bulk-restore', [App\Http\Controllers\ReferenceController::class, 'bulkRestoreLocationType'])->name('references.location-types.bulk-restore');
 
+    // Supplier Types (dengan SoftDeletes)
     Route::post('/references/supplier-types', [App\Http\Controllers\ReferenceController::class, 'storeSupplierType'])->name('references.supplier-types.store');
     Route::put('/references/supplier-types/{supplierType}', [App\Http\Controllers\ReferenceController::class, 'updateSupplierType'])->name('references.supplier-types.update');
     Route::delete('/references/supplier-types/{supplierType}', [App\Http\Controllers\ReferenceController::class, 'destroySupplierType'])->name('references.supplier-types.destroy');
+    Route::post('/references/supplier-types/{id}/restore', [App\Http\Controllers\ReferenceController::class, 'restoreSupplierType'])->name('references.supplier-types.restore');
+    Route::delete('/references/supplier-types/{id}/force-delete', [App\Http\Controllers\ReferenceController::class, 'forceDeleteSupplierType'])->name('references.supplier-types.force-delete');
+    Route::post('/references/supplier-types/bulk-destroy', [App\Http\Controllers\ReferenceController::class, 'bulkDestroySupplierType'])->name('references.supplier-types.bulk-destroy');
+    Route::post('/references/supplier-types/bulk-restore', [App\Http\Controllers\ReferenceController::class, 'bulkRestoreSupplierType'])->name('references.supplier-types.bulk-restore');
 
+    // Medicine Categories (SoftDeletes — existing routes)
     Route::post('/references/medicine-categories', [App\Http\Controllers\ReferenceController::class, 'storeMedicineCategory'])->name('references.medicine-categories.store');
     Route::put('/references/medicine-categories/{medicineCategory}', [App\Http\Controllers\ReferenceController::class, 'updateMedicineCategory'])->name('references.medicine-categories.update');
     Route::delete('/references/medicine-categories/{medicineCategory}', [App\Http\Controllers\ReferenceController::class, 'destroyMedicineCategory'])->name('references.medicine-categories.destroy');
+    Route::post('/references/medicine-categories/{id}/restore', [App\Http\Controllers\ReferenceController::class, 'restoreMedicineCategory'])->name('references.medicine-categories.restore');
+    Route::delete('/references/medicine-categories/{id}/force-delete', [App\Http\Controllers\ReferenceController::class, 'forceDeleteMedicineCategory'])->name('references.medicine-categories.force-delete');
+    Route::post('/references/medicine-categories/bulk-destroy', [App\Http\Controllers\ReferenceController::class, 'bulkDestroyMedicineCategory'])->name('references.medicine-categories.bulk-destroy');
+    Route::post('/references/medicine-categories/bulk-restore', [App\Http\Controllers\ReferenceController::class, 'bulkRestoreMedicineCategory'])->name('references.medicine-categories.bulk-restore');
 
     Route::resource('users', App\Http\Controllers\UserController::class);
 });
