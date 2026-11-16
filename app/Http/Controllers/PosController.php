@@ -96,10 +96,16 @@ class PosController extends Controller
             ->where(function ($q) use ($keywords, $symptoms) {
                 foreach ($keywords as $keyword) {
                     $q->orWhere('name', 'ilike', "%{$keyword}%")
-                        ->orWhere('description', 'ilike', "%{$keyword}%")
-                        ->orWhere('category', 'ilike', "%{$keyword}%");
+                        ->orWhere('generic_name', 'ilike', "%{$keyword}%")
+                        ->orWhereHas('category', function ($catQuery) use ($keyword) {
+                            $catQuery->where('name', 'ilike', "%{$keyword}%");
+                        });
                 }
-                $q->orWhere('name', 'ilike', "%{$symptoms}%");
+                $q->orWhere('name', 'ilike', "%{$symptoms}%")
+                    ->orWhere('generic_name', 'ilike', "%{$symptoms}%")
+                    ->orWhereHas('category', function ($catQuery) use ($symptoms) {
+                        $catQuery->where('name', 'ilike', "%{$symptoms}%");
+                    });
             })
             ->withSum(['batches as real_stock' => function ($q) use ($today) {
                 $q->where('stock_quantity', '>', 0)->where('expired_date', '>=', $today);
@@ -170,22 +176,23 @@ class PosController extends Controller
 
             foreach ($request->cart as $item) {
                 $medicineId = $item['medicine_id'] ?? $item['id'];
-                $unitHpp = InventoryService::deductStockFEFO($medicineId, $item['quantity']);
+                $deduction = InventoryService::deductStockFEFO($medicineId, $item['quantity']);
+                $unitHpp = is_array($deduction) ? ($deduction['unit_hpp'] ?? 0.0) : (float) $deduction;
+                $batchNumber = is_array($deduction) ? ($deduction['batch_number'] ?? 'BATCH-AUTO') : 'BATCH-AUTO';
 
-                $activeBatch = \App\Models\ProductBatch::where('medicine_id', $medicineId)
-                    ->where('stock_quantity', '>', 0)
-                    ->orderBy('expired_date', 'asc')
-                    ->first();
-
-                SaleDetail::create([
+                $saleDetail = SaleDetail::create([
                     'sale_id'        => $sale->id,
                     'medicine_id'    => $medicineId,
-                    'batch_number'   => $activeBatch ? $activeBatch->batch_number : 'BATCH-AUTO',
+                    'batch_number'   => $batchNumber,
                     'quantity'       => $item['quantity'],
                     'purchase_price' => $unitHpp,
                     'selling_price'  => $item['price'],
                     'subtotal'       => $item['quantity'] * $item['price'],
                 ]);
+
+                if (is_array($deduction) && !empty($deduction['batches'])) {
+                    InventoryService::recordSaleDetailBatches($saleDetail->id, $deduction['batches']);
+                }
             }
 
             DB::commit();

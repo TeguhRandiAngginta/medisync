@@ -1,12 +1,12 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useState, useEffect, useMemo } from 'react';
 import SalesFilter from './SalesFilter';
 import SalesTable from './SalesTable';
 import ReceiptModal from './ReceiptModal';
 import ConfirmModal from './ConfirmModal';
 
-export default function Index({ sales, isTrash }) {
+export default function Index({ sales, isTrash, filters = {} }) {
     const { errors } = usePage().props;
     const [authErrorModal, setAuthErrorModal] = useState(false);
     useEffect(() => {
@@ -16,31 +16,39 @@ export default function Index({ sales, isTrash }) {
     }, [errors]);
     const [selectedSale, setSelectedSale] = useState(null);
     const [selectedIds, setSelectedIds] = useState([]);
-    const [filterType, setFilterType] = useState('all');
-    const [customDate, setCustomDate] = useState('');
+    const [filterType, setFilterType] = useState(filters?.filter || 'all');
+    const [customDate, setCustomDate] = useState(filters?.date || '');
     const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', action: null });
 
     const formatRupiah = (number) => {
         return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number || 0);
     };
 
-    const filteredSales = useMemo(() => {
-        if (!sales?.data) return [];
-        if (filterType === 'all') return sales.data;
+    const handleFilterTypeChange = (newType) => {
+        setFilterType(newType);
+        setSelectedIds([]);
+        if (newType !== 'custom') {
+            router.get(
+                route(isTrash ? 'sales.trash' : 'sales.history'),
+                { filter: newType },
+                { preserveState: true, replace: true }
+            );
+        }
+    };
 
-        const today = new Date().toISOString().slice(0, 10);
-        const yesterdayDate = new Date();
-        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-        const yesterday = yesterdayDate.toISOString().slice(0, 10);
+    const handleCustomDateChange = (newDate) => {
+        setCustomDate(newDate);
+        setSelectedIds([]);
+        if (newDate) {
+            router.get(
+                route(isTrash ? 'sales.trash' : 'sales.history'),
+                { filter: 'custom', date: newDate },
+                { preserveState: true, replace: true }
+            );
+        }
+    };
 
-        return sales.data.filter(sale => {
-            const saleDateOnly = sale.sale_date.slice(0, 10);
-            if (filterType === 'today') return saleDateOnly === today;
-            if (filterType === 'yesterday') return saleDateOnly === yesterday;
-            if (filterType === 'custom' && customDate) return saleDateOnly === customDate;
-            return true;
-        });
-    }, [sales, filterType, customDate]);
+    const filteredSales = sales?.data || [];
 
     const handleSelectAll = (e) => {
         if (e.target.checked) {
@@ -235,9 +243,9 @@ export default function Index({ sales, isTrash }) {
                     isTrash={isTrash}
                     selectedIds={selectedIds}
                     filterType={filterType}
-                    setFilterType={setFilterType}
+                    setFilterType={handleFilterTypeChange}
                     customDate={customDate}
-                    setCustomDate={setCustomDate}
+                    setCustomDate={handleCustomDateChange}
                     onBulkPrint={handleBulkPrint}
                     onBulkAction={handleBulkAction}
                 />
@@ -254,6 +262,25 @@ export default function Index({ sales, isTrash }) {
                     onForceDelete={handleForceDelete}
                 />
             </div>
+
+            {sales?.links && sales.links.length > 3 && (
+                <div className="mt-6 flex justify-center gap-1">
+                    {sales.links.map((link, idx) => (
+                        <Link
+                            key={idx}
+                            href={link.url || '#'}
+                            dangerouslySetInnerHTML={{ __html: link.label }}
+                            className={`px-3.5 py-2 text-xs rounded-xl font-bold transition-all ${
+                                link.active
+                                    ? 'bg-[#48CFA4] text-white shadow-sm'
+                                    : link.url
+                                    ? 'bg-white dark:bg-[#1E272E] text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-[#151E24]'
+                                    : 'opacity-40 cursor-not-allowed text-gray-400'
+                            }`}
+                        />
+                    ))}
+                </div>
+            )}
 
             <ConfirmModal 
                 isOpen={confirmModal.show}

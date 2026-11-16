@@ -22,9 +22,7 @@ class PurchaseController extends Controller
         $roleSlug = $user->role->slug ?? '';
 
         if (!in_array($roleSlug, ['superadmin', 'owner'])) {
-            abort(redirect()->back()->withErrors([
-                'authorization' => 'Akses Ditolak: Hanya Owner atau Superadmin yang memiliki hak akses untuk mengubah data faktur pembelian.'
-            ]));
+            abort(403, 'Unauthorized action.');
         }
     }
 
@@ -160,9 +158,21 @@ class PurchaseController extends Controller
     {
         $this->checkOwnerAccess();
 
+        $purchase->load('details');
+        
+        foreach ($purchase->details as $detail) {
+            $batches = ProductBatch::where('purchase_detail_id', $detail->id)->get();
+            foreach ($batches as $batch) {
+                if ($batch->stock_quantity < $detail->quantity) {
+                    return back()->withErrors([
+                        'message' => "Faktur pembelian {$purchase->invoice_number} tidak dapat dihapus karena stok obat pada batch '{$batch->batch_number}' telah terjual sebagian atau seluruhnya (sisa stok: {$batch->stock_quantity} dari {$detail->quantity})."
+                    ]);
+                }
+            }
+        }
+
         DB::beginTransaction();
         try {
-            $purchase->load('details');
             $invoiceNumber = $purchase->invoice_number;
             
             foreach ($purchase->details as $detail) {
@@ -200,9 +210,23 @@ class PurchaseController extends Controller
             'ids.*' => 'exists:purchases,id',
         ]);
 
+        $purchases = Purchase::with('details')->whereIn('id', $validated['ids'])->get();
+
+        foreach ($purchases as $purchase) {
+            foreach ($purchase->details as $detail) {
+                $batches = ProductBatch::where('purchase_detail_id', $detail->id)->get();
+                foreach ($batches as $batch) {
+                    if ($batch->stock_quantity < $detail->quantity) {
+                        return back()->withErrors([
+                            'message' => "Faktur pembelian {$purchase->invoice_number} tidak dapat dihapus karena stok obat pada batch '{$batch->batch_number}' telah terjual sebagian atau seluruhnya (sisa stok: {$batch->stock_quantity} dari {$detail->quantity})."
+                        ]);
+                    }
+                }
+            }
+        }
+
         DB::beginTransaction();
         try {
-            $purchases = Purchase::with('details')->whereIn('id', $validated['ids'])->get();
             $affectedMedicineIds = [];
 
             foreach ($purchases as $purchase) {

@@ -11,7 +11,7 @@ use Exception;
 
 class InventoryService
 {
-    public static function deductStockFEFO(int $medicineId, int $requestedQty): float
+    public static function deductStockFEFO(int $medicineId, int $requestedQty): array
     {
         $medicine = Medicine::where('id', $medicineId)->lockForUpdate()->first();
 
@@ -33,6 +33,7 @@ class InventoryService
 
         $remainingToDeduct = $requestedQty;
         $totalCostOfGoodsSold = 0.0;
+        $deductedBatches = [];
 
         foreach ($batches as $batch) {
             if ($remainingToDeduct <= 0) {
@@ -43,6 +44,13 @@ class InventoryService
             $batchPurchasePrice = (float) ($batch->purchase_price ?? $medicine->purchase_price ?? 0);
             
             $totalCostOfGoodsSold += ($deductQty * $batchPurchasePrice);
+
+            $deductedBatches[] = [
+                'product_batch_id' => $batch->id,
+                'batch_number'     => $batch->batch_number,
+                'quantity'         => $deductQty,
+                'purchase_price'   => $batchPurchasePrice,
+            ];
 
             if ($batch->stock_quantity >= $remainingToDeduct) {
                 $batch->decrement('stock_quantity', $remainingToDeduct);
@@ -64,18 +72,82 @@ class InventoryService
             );
         }
 
-        return $requestedQty > 0 ? ($totalCostOfGoodsSold / $requestedQty) : 0.0;
+        $unitHpp = $requestedQty > 0 ? ($totalCostOfGoodsSold / $requestedQty) : 0.0;
+        $primaryBatchNumber = !empty($deductedBatches) ? $deductedBatches[0]['batch_number'] : 'BATCH-AUTO';
+
+        return [
+            'unit_hpp'     => $unitHpp,
+            'batch_number' => $primaryBatchNumber,
+            'batches'      => $deductedBatches,
+        ];
     }
 
-    public static function restoreStockFEFO(int $medicineId, int $quantity): void
+    public static function recordSaleDetailBatches(int $saleDetailId, array $batches): void
     {
-        DB::transaction(function () use ($medicineId, $quantity) {
-            $batch = ProductBatch::where('medicine_id', $medicineId)
-                ->orderBy('expired_date', 'desc')
-                ->first();
+        if (empty($batches) || !DB::getSchemaBuilder()->hasTable('sale_detail_batches')) {
+            return;
+        }
 
-            if ($batch) {
-                $batch->increment('stock_quantity', $quantity);
+        foreach ($batches as $batch) {
+            DB::table('sale_detail_batches')->insert([
+                'sale_detail_id'   => $saleDetailId,
+                'product_batch_id' => $batch['product_batch_id'],
+                'quantity'         => $batch['quantity'],
+                'purchase_price'   => $batch['purchase_price'],
+                'created_at'       => now(),
+                'updated_at'       => now(),
+            ]);
+        }
+    }
+
+    public static function restoreStockFEFO(int $medicineId, int $quantity, ?string $batchNumber = null, ?int $saleDetailId = null): void
+    {
+        DB::transaction(function () use ($medicineId, $quantity, $batchNumber, $saleDetailId) {
+            $restored = false;
+
+            // 1. Prioritaskan pengembalian ke batch spesifik dari sale_detail_batches jika tersedia
+            if ($saleDetailId && DB::getSchemaBuilder()->hasTable('sale_detail_batches')) {
+                $detailBatches = DB::table('sale_detail_batches')
+                    ->where('sale_detail_id', $saleDetailId)
+                    ->get();
+
+                if ($detailBatches->isNotEmpty()) {
+                    foreach ($detailBatches as $detailBatch) {
+                        $batch = ProductBatch::where('id', $detailBatch->product_batch_id)
+                            ->lockForUpdate()
+                            ->first();
+
+                        if ($batch) {
+                            $batch->increment('stock_quantity', $detailBatch->quantity);
+                        }
+                    }
+                    $restored = true;
+                }
+            }
+
+            // 2. Jika belum dipulihkan lewat sale_detail_batches, coba cocokkan lewat batch_number asal
+            if (!$restored && !empty($batchNumber) && $batchNumber !== 'BATCH-AUTO') {
+                $batch = ProductBatch::where('medicine_id', $medicineId)
+                    ->where('batch_number', $batchNumber)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($batch) {
+                    $batch->increment('stock_quantity', $quantity);
+                    $restored = true;
+                }
+            }
+
+            // 3. Fallback: ambil batch terbaru dengan lockForUpdate()
+            if (!$restored) {
+                $batch = ProductBatch::where('medicine_id', $medicineId)
+                    ->orderBy('expired_date', 'desc')
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($batch) {
+                    $batch->increment('stock_quantity', $quantity);
+                }
             }
 
             self::syncMedicineStock($medicineId);

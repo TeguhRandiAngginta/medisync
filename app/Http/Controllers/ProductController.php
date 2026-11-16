@@ -8,6 +8,7 @@ use App\Models\Supplier;
 use App\Models\Rack;
 use App\Models\AuditLog;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 
@@ -68,18 +69,33 @@ class ProductController extends Controller
 
     public function destroy(Medicine $product)
     {
-        $batchCount = \App\Models\ProductBatch::withTrashed()->where('medicine_id', $product->id)->count();
-        $purchaseCount = \App\Models\PurchaseDetail::where('medicine_id', $product->id)->count();
-        
-        if ($batchCount > 0 || $purchaseCount > 0) {
-            return back()->withErrors(['message' => "Aksi Ditolak: Obat '{$product->name}' tidak boleh dihapus karena sudah terhubung dengan Faktur Pembelian dan Monitoring Batch. (Solusi: Edit obat ini dan matikan status aktifnya jika tidak dijual lagi)."]);
+        $hasActiveBatches = \App\Models\ProductBatch::where('medicine_id', $product->id)
+            ->where('stock_quantity', '>', 0)
+            ->exists();
+        $hasSalesHistory = \App\Models\SaleDetail::where('medicine_id', $product->id)->exists();
+        $hasPurchaseHistory = \App\Models\PurchaseDetail::where('medicine_id', $product->id)->exists();
+        $hasBatchHistory = \App\Models\ProductBatch::withTrashed()->where('medicine_id', $product->id)->exists();
+
+        if ($hasActiveBatches || $hasSalesHistory || $hasPurchaseHistory || $hasBatchHistory) {
+            return back()->withErrors([
+                'message' => "Aksi Ditolak: Obat '{$product->name}' tidak dapat dihapus karena sudah memiliki riwayat transaksi/batch aktif. (Solusi: Nonaktifkan status aktif obat jika sudah tidak digunakan)."
+            ]);
         }
 
-        $name = $product->name;
-        $product->delete(); 
-        
-        AuditLog::record('inventaris', 'DELETE', "Menghapus data obat: {$name}");
-        return back()->with('success', "Obat {$name} berhasil dihapus dari sistem.");
+        try {
+            DB::transaction(function () use ($product) {
+                $name = $product->name;
+                $product->delete();
+
+                if (class_exists(AuditLog::class)) {
+                    AuditLog::record('inventaris', 'DELETE', "Menghapus data obat: {$name}");
+                }
+            });
+
+            return back()->with('success', "Obat {$product->name} berhasil dihapus dari sistem.");
+        } catch (\Exception $e) {
+            return back()->withErrors(['message' => 'Gagal menghapus obat: ' . $e->getMessage()]);
+        }
     }
 
     public function edit(Medicine $product)

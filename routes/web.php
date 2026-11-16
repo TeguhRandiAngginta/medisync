@@ -21,8 +21,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
 
-    // POS & Penjualan (Bisa diakses Superadmin, Apoteker, dan Kasir)
+// POS, Penjualan, & Resep (Bisa diakses Superadmin, Apoteker, dan Kasir)
+Route::middleware(['auth', 'verified', 'role:superadmin,apoteker,kasir'])->group(function () {
     Route::get('/pos', [App\Http\Controllers\PosController::class, 'index'])->name('pos.index');
     Route::post('/pos/shift/open', [App\Http\Controllers\CashRegisterController::class, 'openShift'])->name('pos.shift.open');
     Route::post('/pos/shift/close', [App\Http\Controllers\CashRegisterController::class, 'closeShift'])->name('pos.shift.close');
@@ -47,11 +49,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('prescriptions', PrescriptionController::class)->except(['show', 'edit', 'update']);
     Route::get('/prescriptions/{prescription}/edit', [PrescriptionController::class, 'edit'])->name('prescriptions.edit');
     Route::put('/prescriptions/{prescription}', [PrescriptionController::class, 'update'])->name('prescriptions.update');
-
 });
 
-// Akses Terbatas (Pembelian, Produk, Supplier, Batch FEFO)
-Route::middleware(['auth', 'verified'])->group(function () {
+// Akses Terbatas Inventaris & Pembelian (Superadmin & Apoteker)
+Route::middleware(['auth', 'verified', 'role:superadmin,apoteker'])->group(function () {
     Route::get('purchases/trash', [PurchaseController::class, 'trash'])->name('purchases.trash');
     Route::post('purchases/{id}/restore', [PurchaseController::class, 'restore'])->name('purchases.restore');
     Route::delete('purchases/{id}/force-delete', [PurchaseController::class, 'forceDelete'])->name('purchases.force-delete');
@@ -74,8 +75,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('stock-adjustments', App\Http\Controllers\StockAdjustmentController::class)->only(['index', 'create', 'store']);
 });
 
-// Akses Absolut / Eksekutif (Laporan, Audit, Manajemen User)
-Route::middleware(['auth', 'verified'])->group(function () {
+// Akses Absolut / Eksekutif (Hanya Superadmin: Laporan, Audit, Master Referensi, Manajemen User)
+Route::middleware(['auth', 'verified', 'role:superadmin'])->group(function () {
     Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
     Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
     Route::get('/audit-logs', [App\Http\Controllers\AuditLogController::class, 'index'])->name('audit-logs.index');

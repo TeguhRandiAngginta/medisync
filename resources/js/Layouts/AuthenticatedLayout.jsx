@@ -30,7 +30,7 @@ const Icons = {
 export default function AuthenticatedLayout({ header, children }) {
     const { auth, flash, errors } = usePage().props;
     const user = auth.user;
-    const userRole = user?.role?.slug || 'superadmin'; 
+    const userRole = user?.role?.slug || 'kasir'; 
     
     const [isDarkMode, setIsDarkMode] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
