@@ -5,20 +5,29 @@ namespace App\Http\Controllers;
 use App\Models\Medicine;
 use App\Models\ProductBatch;
 use App\Models\StockAdjustment;
+use App\Models\AuditLog;
 use App\Services\InventoryService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class StockAdjustmentController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $adjustments = StockAdjustment::with(['medicine', 'productBatch', 'user'])
-            ->latest()
-            ->paginate(15);
+        $trashed = $request->boolean('trashed', false);
+
+        $query = StockAdjustment::with(['medicine', 'productBatch', 'user'])
+            ->when($trashed, fn($q) => $q->onlyTrashed(), fn($q) => $q->withoutTrashed())
+            ->orderBy($trashed ? 'deleted_at' : 'created_at', 'desc');
+
+        $adjustments = $query->paginate(15)->withQueryString();
+        $trashedCount = StockAdjustment::onlyTrashed()->count();
 
         return Inertia::render('StockOpname/Index', [
-            'adjustments' => $adjustments
+            'adjustments'  => $adjustments,
+            'trashed'      => $trashed,
+            'trashedCount' => $trashedCount,
         ]);
     }
 
@@ -53,6 +62,220 @@ class StockAdjustmentController extends Controller
             return redirect()->route('stock-adjustments.index')->with('success', 'Stock opname berhasil dicatat dan stok disesuaikan!');
         } catch (\Exception $e) {
             return back()->withErrors(['message' => 'Gagal memperbarui stok: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Soft delete stock adjustment and rollback the batch stock adjustment
+     * (difference = actual - system; rollback: decrement by difference)
+     */
+    public function destroy($id)
+    {
+        DB::beginTransaction();
+        try {
+            $adjustment = StockAdjustment::findOrFail($id);
+            $this->rollbackAdjustmentStock($adjustment);
+            $adjustment->delete();
+
+            if (class_exists(AuditLog::class)) {
+                $medName = $adjustment->medicine->name ?? 'Obat';
+                AuditLog::record(
+                    'stok',
+                    'DELETE',
+                    "Membatalkan penyesuaian stok ID #{$adjustment->id} obat '{$medName}' dan mengembalikan stok batch ke kondisi sebelum opname."
+                );
+            }
+
+            DB::commit();
+            return redirect()->route('stock-adjustments.index')
+                ->with('success', 'Catatan stock opname berhasil dipindahkan ke tong sampah dan saldo stok dikembalikan.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal membatalkan stock opname: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Restore stock adjustment and re-apply the difference to batch stock
+     */
+    public function restore($id)
+    {
+        DB::beginTransaction();
+        try {
+            $adjustment = StockAdjustment::onlyTrashed()->findOrFail($id);
+            $this->reapplyAdjustmentStock($adjustment);
+            $adjustment->restore();
+
+            if (class_exists(AuditLog::class)) {
+                $medName = $adjustment->medicine->name ?? 'Obat';
+                AuditLog::record(
+                    'stok',
+                    'RESTORE',
+                    "Memulihkan catatan stock opname ID #{$adjustment->id} obat '{$medName}' dan menerapkan ulang penyesuaian stok ke batch."
+                );
+            }
+
+            DB::commit();
+            return redirect()->route('stock-adjustments.index', ['trashed' => true])
+                ->with('success', 'Catatan stock opname berhasil dipulihkan dan saldo stok disesuaikan kembali.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal memulihkan stock opname: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Permanently delete stock adjustment from trash
+     * Note: Stock is NOT modified again on forceDelete because it was already rolled back during destroy!
+     */
+    public function forceDelete($id)
+    {
+        DB::beginTransaction();
+        try {
+            $adjustment = StockAdjustment::onlyTrashed()->findOrFail($id);
+            $adjId = $adjustment->id;
+            $medName = $adjustment->medicine->name ?? 'Obat';
+
+            $adjustment->forceDelete();
+
+            if (class_exists(AuditLog::class)) {
+                AuditLog::record(
+                    'stok',
+                    'FORCE DELETE',
+                    "Menghapus PERMANEN catatan audit stock opname ID #{$adjId} obat '{$medName}' dari database."
+                );
+            }
+
+            DB::commit();
+            return redirect()->route('stock-adjustments.index', ['trashed' => true])
+                ->with('success', "Catatan stock opname #{$adjId} berhasil dihapus secara permanen.");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal menghapus permanen: ' . $e->getMessage()]);
+        }
+    }
+
+    public function bulkDestroy(Request $request)
+    {
+        $validated = $request->validate([
+            'ids'   => 'required|array',
+            'ids.*' => 'exists:stock_adjustments,id',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $adjustments = StockAdjustment::whereIn('id', $validated['ids'])->get();
+            foreach ($adjustments as $adj) {
+                $this->rollbackAdjustmentStock($adj);
+                $adj->delete();
+            }
+
+            if (class_exists(AuditLog::class)) {
+                AuditLog::record('stok', 'BULK_DELETE', 'Memindahkan ' . count($adjustments) . ' catatan stock opname ke tong sampah dan mengembalikan saldo stok.');
+            }
+
+            DB::commit();
+            return redirect()->route('stock-adjustments.index')
+                ->with('success', count($adjustments) . ' catatan stock opname berhasil dipindahkan ke tong sampah.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal membatalkan massal: ' . $e->getMessage()]);
+        }
+    }
+
+    public function bulkRestore(Request $request)
+    {
+        $validated = $request->validate([
+            'ids'   => 'required|array',
+            'ids.*' => 'integer',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $adjustments = StockAdjustment::onlyTrashed()->whereIn('id', $validated['ids'])->get();
+            foreach ($adjustments as $adj) {
+                $this->reapplyAdjustmentStock($adj);
+                $adj->restore();
+            }
+
+            if (class_exists(AuditLog::class)) {
+                AuditLog::record('stok', 'BULK_RESTORE', 'Memulihkan ' . count($adjustments) . ' catatan stock opname dari tong sampah dan menerapkan ulang penyesuaian stok.');
+            }
+
+            DB::commit();
+            return redirect()->route('stock-adjustments.index', ['trashed' => true])
+                ->with('success', count($adjustments) . ' catatan stock opname berhasil dipulihkan.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal memulihkan massal: ' . $e->getMessage()]);
+        }
+    }
+
+    public function bulkForceDelete(Request $request)
+    {
+        $validated = $request->validate([
+            'ids'   => 'required|array',
+            'ids.*' => 'integer',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $adjustments = StockAdjustment::onlyTrashed()->whereIn('id', $validated['ids'])->get();
+            $count = $adjustments->count();
+
+            foreach ($adjustments as $adj) {
+                $adj->forceDelete();
+            }
+
+            if (class_exists(AuditLog::class)) {
+                AuditLog::record('stok', 'FORCE DELETE', "Menghapus PERMANEN {$count} catatan audit stock opname dari database (bulk).");
+            }
+
+            DB::commit();
+            return redirect()->route('stock-adjustments.index', ['trashed' => true])
+                ->with('success', "{$count} catatan stock opname berhasil dihapus secara permanen.");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal hapus permanen massal: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Helper: Rollback adjustment difference from batch
+     * difference = actual - system
+     * to rollback: subtract difference (or system - actual)
+     */
+    private function rollbackAdjustmentStock(StockAdjustment $adjustment): void
+    {
+        if ($adjustment->product_batch_id) {
+            $batch = ProductBatch::where('id', $adjustment->product_batch_id)->lockForUpdate()->first();
+            if ($batch) {
+                // actual = system + difference
+                // to restore back to system: new_stock = batch.stock - difference
+                $newStock = max(0, $batch->stock_quantity - $adjustment->difference);
+                $batch->update(['stock_quantity' => $newStock]);
+                InventoryService::syncMedicineStock($batch->medicine_id);
+            }
+        } elseif ($adjustment->medicine_id) {
+            InventoryService::syncMedicineStock($adjustment->medicine_id);
+        }
+    }
+
+    /**
+     * Helper: Re-apply adjustment difference to batch
+     */
+    private function reapplyAdjustmentStock(StockAdjustment $adjustment): void
+    {
+        if ($adjustment->product_batch_id) {
+            $batch = ProductBatch::where('id', $adjustment->product_batch_id)->lockForUpdate()->first();
+            if ($batch) {
+                // re-apply difference
+                $newStock = max(0, $batch->stock_quantity + $adjustment->difference);
+                $batch->update(['stock_quantity' => $newStock]);
+                InventoryService::syncMedicineStock($batch->medicine_id);
+            }
+        } elseif ($adjustment->medicine_id) {
+            InventoryService::syncMedicineStock($adjustment->medicine_id);
         }
     }
 }

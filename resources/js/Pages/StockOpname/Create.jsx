@@ -1,10 +1,14 @@
+import React, { useState, useMemo } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { useState, useMemo } from 'react';
+import MedicineCombobox from './Components/MedicineCombobox';
+import BatchCombobox from './Components/BatchCombobox';
+import InputError from '@/Components/InputError';
+
+const MEDISYNC_BTN_CLASS = "px-6 py-2.5 rounded-md text-sm font-bold flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-[#48CFA4] text-white hover:bg-[#3bb890] shadow-sm dark:bg-[#253939] dark:text-[#67E2B4] dark:hover:bg-[#2d4747] dark:border dark:border-[#30413B] dark:shadow-none cursor-pointer";
 
 export default function StockOpnameCreate({ medicines = [] }) {
     const [selectedMedicineId, setSelectedMedicineId] = useState('');
-    const [searchQuery, setSearchQuery] = useState('');
 
     const { data, setData, post, processing, errors } = useForm({
         product_batch_id: '',
@@ -12,14 +16,6 @@ export default function StockOpnameCreate({ medicines = [] }) {
         type: 'CORRECTION',
         notes: '',
     });
-
-    const filteredMedicines = useMemo(() => {
-        if (!searchQuery) return medicines;
-        const q = searchQuery.toLowerCase();
-        return medicines.filter((m) =>
-            m.name.toLowerCase().includes(q) || (m.sku && m.sku.toLowerCase().includes(q))
-        );
-    }, [medicines, searchQuery]);
 
     const selectedMedicine = useMemo(() => {
         return medicines.find((m) => String(m.id) === String(selectedMedicineId)) || null;
@@ -37,20 +33,40 @@ export default function StockOpnameCreate({ medicines = [] }) {
         return actual - selectedBatch.stock_quantity;
     }, [selectedBatch, data.actual_stock]);
 
-    const handleMedicineChange = (medId) => {
-        setSelectedMedicineId(medId);
-        setData('product_batch_id', '');
-        setData('actual_stock', '');
+    const handleSelectMedicine = (med) => {
+        if (!med) {
+            setSelectedMedicineId('');
+            setData({
+                ...data,
+                product_batch_id: '',
+                actual_stock: '',
+            });
+            return;
+        }
+
+        setSelectedMedicineId(med.id);
+        setData({
+            ...data,
+            product_batch_id: '',
+            actual_stock: '',
+        });
     };
 
-    const handleBatchChange = (batchId) => {
-        setData('product_batch_id', batchId);
-        const batch = selectedMedicine?.batches?.find((b) => String(b.id) === String(batchId));
-        if (batch) {
-            setData('actual_stock', batch.stock_quantity);
-        } else {
-            setData('actual_stock', '');
+    const handleSelectBatch = (batch) => {
+        if (!batch) {
+            setData({
+                ...data,
+                product_batch_id: '',
+                actual_stock: '',
+            });
+            return;
         }
+
+        setData({
+            ...data,
+            product_batch_id: batch.id,
+            actual_stock: batch.stock_quantity,
+        });
     };
 
     const handleSubmit = (e) => {
@@ -58,184 +74,233 @@ export default function StockOpnameCreate({ medicines = [] }) {
         post(route('stock-adjustments.store'));
     };
 
+    const adjustmentTypes = [
+        {
+            value: 'CORRECTION',
+            label: 'Koreksi Rutin',
+            desc: 'Penyesuaian selisih hitung fisik berkala',
+            badgeClass: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+        },
+        {
+            value: 'DAMAGE',
+            label: 'Kerusakan Fisik',
+            desc: 'Kemasan rusak / bocor / pecah di rak gudang',
+            badgeClass: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'
+        },
+        {
+            value: 'EXPIRED',
+            label: 'Kedaluwarsa (ED)',
+            desc: 'Obat melewati batas masa konsumsi',
+            badgeClass: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+        },
+        {
+            value: 'LOST',
+            label: 'Selisih Hilang',
+            desc: 'Fisik tidak ditemukan saat audit opname',
+            badgeClass: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+        },
+    ];
+
     return (
         <AuthenticatedLayout header="Catat Stock Opname Baru">
             <Head title="Input Stock Opname" />
 
-            <div className="max-w-4xl mx-auto">
-                <div className="flex items-center justify-between mb-8">
+            <div className="max-w-5xl mx-auto pb-12 space-y-6">
+                {/* Header Breadcrumb / Title with Kembali Button */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div>
-                        <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Formulir Penyesuaian Stok (Opname)</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Pilih obat dan batch untuk melakukan rekonsiliasi fisik gudang.</p>
+                        <h3 className="text-xl font-extrabold text-gray-800 dark:text-gray-100">Formulir Penyesuaian Stok (Opname)</h3>
+                        <p className="text-xs text-gray-400 mt-0.5">Pilih obat dan batch untuk melakukan rekonsiliasi fisik gudang.</p>
                     </div>
+
                     <Link
                         href={route('stock-adjustments.index')}
-                        className="px-4 py-2 bg-gray-100 dark:bg-[#151E24] text-gray-700 dark:text-gray-300 rounded-xl text-sm font-bold hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
+                        className="px-4 py-2 bg-gray-100 dark:bg-[#151E24] text-gray-700 dark:text-gray-300 rounded-md text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors flex items-center gap-1.5 border border-gray-200 dark:border-gray-700/60 shadow-sm cursor-pointer"
                     >
-                        &larr; Kembali
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                        Kembali
                     </Link>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="bg-white dark:bg-[#1E272E] rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 space-y-6">
-                        <h4 className="text-sm font-bold uppercase text-[#48CFA4] tracking-wider">1. Pilih Produk & Batch</h4>
-
-                        {/* Search & Select Medicine */}
-                        <div>
-                            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-2">
-                                Cari & Pilih Obat <span className="text-rose-500">*</span>
-                            </label>
-                            <input
-                                type="text"
-                                placeholder="Ketik nama atau SKU obat untuk menyaring..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full mb-2 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#151E24] text-gray-800 dark:text-gray-100 text-sm focus:ring-2 focus:ring-[#48CFA4] focus:border-transparent outline-none"
-                            />
-                            <select
-                                value={selectedMedicineId}
-                                onChange={(e) => handleMedicineChange(e.target.value)}
-                                className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#151E24] text-gray-800 dark:text-gray-100 text-sm focus:ring-2 focus:ring-[#48CFA4] focus:border-transparent outline-none"
-                                required
-                            >
-                                <option value="">-- Pilih Obat ({filteredMedicines.length} tersedia) --</option>
-                                {filteredMedicines.map((med) => (
-                                    <option key={med.id} value={med.id}>
-                                        {med.name} ({med.sku}) - {med.batches?.length || 0} Batch Tersedia
-                                    </option>
-                                ))}
-                            </select>
+                    {/* Card 1: Pilih Produk & Batch Obat */}
+                    <div className="bg-white dark:bg-[#1E272E] p-8 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 transition-colors space-y-6">
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between pb-4 border-b border-gray-100 dark:border-gray-800 gap-4">
+                            <div>
+                                <h4 className="text-base font-extrabold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                                    <span className="w-2.5 h-6 bg-[#48CFA4] rounded-full"></span> 1. Pilih Produk & Batch Obat
+                                </h4>
+                                <p className="text-xs text-gray-400 mt-1">Pilih obat dari katalog master lalu pilih nomor batch spesifik yang akan dihitung fisik.</p>
+                            </div>
                         </div>
 
-                        {/* Select Batch */}
+                        {/* Searchable Combobox Obat */}
+                        <div>
+                            <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-2">
+                                Pilih Obat Master <span className="text-red-500">*</span>
+                            </label>
+                            <MedicineCombobox
+                                medicines={medicines}
+                                selectedMedicineId={selectedMedicineId}
+                                onSelect={handleSelectMedicine}
+                                error={errors.medicine_id}
+                            />
+                        </div>
+
+                        {/* Searchable Combobox Batch */}
                         {selectedMedicine && (
-                            <div>
-                                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-2">
-                                    Nomor Batch Obat <span className="text-rose-500">*</span>
+                            <div className="animate-in fade-in duration-200 pt-2 border-t border-gray-50 dark:border-gray-800/80">
+                                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-2">
+                                    Nomor Batch Obat (FEFO) <span className="text-red-500">*</span>
                                 </label>
-                                {(!selectedMedicine.batches || selectedMedicine.batches.length === 0) ? (
-                                    <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 text-sm font-medium">
-                                        Obat ini belum memiliki batch tercatat di sistem. Harap masukkan faktur pembelian terlebih dahulu.
-                                    </div>
-                                ) : (
-                                    <select
-                                        value={data.product_batch_id}
-                                        onChange={(e) => handleBatchChange(e.target.value)}
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#151E24] text-gray-800 dark:text-gray-100 text-sm focus:ring-2 focus:ring-[#48CFA4] focus:border-transparent outline-none font-mono"
-                                        required
-                                    >
-                                        <option value="">-- Pilih Batch --</option>
-                                        {selectedMedicine.batches.map((batch) => (
-                                            <option key={batch.id} value={batch.id}>
-                                                Batch: {batch.batch_number} | Sisa Stok Sistem: {batch.stock_quantity} {selectedMedicine.base_unit} | ED: {batch.expired_date}
-                                            </option>
-                                        ))}
-                                    </select>
-                                )}
-                                {errors.product_batch_id && (
-                                    <p className="mt-1.5 text-xs text-rose-500 font-semibold">{errors.product_batch_id}</p>
-                                )}
+                                <BatchCombobox
+                                    batches={selectedMedicine.batches || []}
+                                    selectedBatchId={data.product_batch_id}
+                                    baseUnit={selectedMedicine.base_unit || 'Pcs'}
+                                    onSelect={handleSelectBatch}
+                                    error={errors.product_batch_id}
+                                />
                             </div>
                         )}
                     </div>
 
-                    {/* Step 2: Input Reconciliation */}
+                    {/* Card 2: Rekonsiliasi & Hasil Opname */}
                     {selectedBatch && (
-                        <div className="bg-white dark:bg-[#1E272E] rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 space-y-6">
-                            <h4 className="text-sm font-bold uppercase text-[#48CFA4] tracking-wider">2. Rekonsiliasi & Hasil Opname</h4>
+                        <div className="bg-white dark:bg-[#1E272E] p-8 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 transition-colors space-y-6 animate-in fade-in duration-200">
+                            <div className="flex flex-col md:flex-row items-start md:items-center justify-between pb-4 border-b border-gray-100 dark:border-gray-800 gap-4">
+                                <div>
+                                    <h4 className="text-base font-extrabold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                                        <span className="w-2.5 h-6 bg-[#F6A84B] rounded-full"></span> 2. Rekonsiliasi & Hasil Opname
+                                    </h4>
+                                    <p className="text-xs text-gray-400 mt-1">Masukkan hasil perhitungan fisik riil dan tentukan jenis penyesuaian stok.</p>
+                                </div>
+                            </div>
 
+                            {/* 3 Metrics Cards */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div className="p-4 rounded-xl bg-gray-50 dark:bg-[#151E24] border border-gray-100 dark:border-gray-800">
-                                    <span className="text-xs text-gray-400 uppercase font-bold block mb-1">Stok Sistem Saat Ini</span>
+                                {/* Stok Sistem */}
+                                <div className="p-5 rounded-2xl bg-gray-50/70 dark:bg-[#151E24] border border-gray-100 dark:border-gray-800">
+                                    <span className="text-[11px] text-gray-400 uppercase font-bold tracking-wider block mb-1">Stok Sistem Saat Ini</span>
                                     <span className="text-2xl font-mono font-bold text-gray-800 dark:text-gray-100">
                                         {selectedBatch.stock_quantity} <span className="text-sm font-normal text-gray-400">{selectedMedicine?.base_unit}</span>
                                     </span>
                                 </div>
 
-                                <div className="p-4 rounded-xl bg-gray-50 dark:bg-[#151E24] border border-gray-100 dark:border-gray-800">
-                                    <label className="text-xs text-gray-700 dark:text-gray-300 uppercase font-bold block mb-1">
-                                        Stok Fisik Aktual <span className="text-rose-500">*</span>
+                                {/* Stok Fisik Aktual */}
+                                <div className="p-5 rounded-2xl bg-gray-50/70 dark:bg-[#151E24] border border-gray-100 dark:border-gray-800">
+                                    <label className="text-[11px] text-gray-700 dark:text-gray-300 uppercase font-bold tracking-wider block mb-1">
+                                        Stok Fisik Aktual <span className="text-red-500">*</span>
                                     </label>
                                     <input
                                         type="number"
                                         min="0"
                                         value={data.actual_stock}
                                         onChange={(e) => setData('actual_stock', e.target.value)}
-                                        className="w-full px-3 py-1.5 font-mono text-xl font-bold rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1E272E] text-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-[#48CFA4] outline-none"
+                                        placeholder="0"
+                                        className="w-full px-4 py-2 font-mono text-xl font-bold rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1E272E] text-gray-900 dark:text-gray-100 focus:border-[#48CFA4] focus:ring-2 focus:ring-[#48CFA4]/20 outline-none"
                                         required
                                     />
-                                    {errors.actual_stock && (
-                                        <p className="mt-1 text-xs text-rose-500 font-semibold">{errors.actual_stock}</p>
-                                    )}
+                                    <InputError message={errors.actual_stock} className="mt-1" />
                                 </div>
 
-                                <div className="p-4 rounded-xl bg-gray-50 dark:bg-[#151E24] border border-gray-100 dark:border-gray-800">
-                                    <span className="text-xs text-gray-400 uppercase font-bold block mb-1">Selisih Fisik vs Sistem</span>
-                                    <span className={`text-2xl font-mono font-bold ${
-                                        difference === null ? 'text-gray-400' :
-                                        difference > 0 ? 'text-emerald-500' :
-                                        difference < 0 ? 'text-rose-500' : 'text-gray-600 dark:text-gray-300'
-                                    }`}>
-                                        {difference === null ? '-' : difference > 0 ? `+${difference}` : difference}
+                                {/* Selisih Fisik vs Sistem */}
+                                <div className="p-5 rounded-2xl bg-gray-50/70 dark:bg-[#151E24] border border-gray-100 dark:border-gray-800">
+                                    <span className="text-[11px] text-gray-400 uppercase font-bold tracking-wider block mb-1">Selisih Fisik vs Sistem</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-2xl font-mono font-black ${
+                                            difference === null ? 'text-gray-400' :
+                                            difference > 0 ? 'text-emerald-500' :
+                                            difference < 0 ? 'text-rose-500' : 'text-gray-600 dark:text-gray-300'
+                                        }`}>
+                                            {difference === null ? '-' : difference > 0 ? `+${difference}` : difference}
+                                        </span>
                                         {difference !== null && (
-                                            <span className="text-xs font-normal ml-1">
-                                                ({difference > 0 ? 'Surplus' : difference < 0 ? 'Defisit' : 'Cocok'})
+                                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                                                difference > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                                                difference < 0 ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' :
+                                                'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                                            }`}>
+                                                {difference > 0 ? 'Surplus (+)' : difference < 0 ? 'Defisit (-)' : 'Sesuai (0)'}
                                             </span>
                                         )}
-                                    </span>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Jenis Penyesuaian & Catatan */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-2">
-                                        Jenis Penyesuaian <span className="text-rose-500">*</span>
+                                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-2">
+                                        Jenis Penyesuaian <span className="text-red-500">*</span>
                                     </label>
-                                    <select
-                                        value={data.type}
-                                        onChange={(e) => setData('type', e.target.value)}
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#151E24] text-gray-800 dark:text-gray-100 text-sm focus:ring-2 focus:ring-[#48CFA4] outline-none"
-                                        required
-                                    >
-                                        <option value="CORRECTION">Koreksi Opname Rutin</option>
-                                        <option value="DAMAGE">Kerusakan Fisik Barang</option>
-                                        <option value="EXPIRED">Kedaluwarsa (Expired)</option>
-                                        <option value="LOST">Barang Hilang / Selisih Fisik</option>
-                                    </select>
-                                    {errors.type && (
-                                        <p className="mt-1.5 text-xs text-rose-500 font-semibold">{errors.type}</p>
-                                    )}
+                                    
+                                    {/* Segmented Select Cards */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                        {adjustmentTypes.map((adj) => {
+                                            const isSelected = data.type === adj.value;
+                                            return (
+                                                <div
+                                                    key={adj.value}
+                                                    onClick={() => setData('type', adj.value)}
+                                                    className={`p-3 rounded-2xl border cursor-pointer transition-all duration-150 flex flex-col justify-between ${
+                                                        isSelected
+                                                            ? 'border-[#48CFA4] bg-[#EAF5F0]/60 dark:bg-[#253939]/40 shadow-sm'
+                                                            : 'border-gray-200 dark:border-gray-700/80 bg-gray-50/40 dark:bg-[#151E24] hover:border-gray-300 dark:hover:border-gray-600'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <span className="font-bold text-xs text-gray-800 dark:text-gray-100">
+                                                            {adj.label}
+                                                        </span>
+                                                        <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                                                            isSelected ? 'border-[#48CFA4] bg-[#48CFA4]' : 'border-gray-300 dark:border-gray-600'
+                                                        }`}>
+                                                            {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
+                                                        </div>
+                                                    </div>
+                                                    <p className="text-[11px] text-gray-400 leading-snug">
+                                                        {adj.desc}
+                                                    </p>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <InputError message={errors.type} className="mt-1" />
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-2">
+                                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-2">
                                         Catatan / Keterangan Penyesuaian
                                     </label>
                                     <textarea
-                                        rows="3"
+                                        rows="4"
                                         value={data.notes}
                                         onChange={(e) => setData('notes', e.target.value)}
-                                        placeholder="Contoh: Ditemukan kemasan botol pecah di rak A-2 saat audit bulanan..."
-                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#151E24] text-gray-800 dark:text-gray-100 text-sm focus:ring-2 focus:ring-[#48CFA4] outline-none"
+                                        placeholder="Contoh: Ditemukan kemasan pecah di rak A-2 saat audit fisik bulanan..."
+                                        className="w-full px-4 py-3 bg-gray-50/50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-2xl focus:border-[#48CFA4] text-gray-900 dark:text-gray-100 text-sm outline-none"
                                     ></textarea>
-                                    {errors.notes && (
-                                        <p className="mt-1.5 text-xs text-rose-500 font-semibold">{errors.notes}</p>
-                                    )}
+                                    <InputError message={errors.notes} className="mt-1" />
                                 </div>
                             </div>
 
-                            <div className="pt-4 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3">
+                            {/* Footer Action Buttons */}
+                            <div className="flex justify-end gap-3 pt-6 border-t border-gray-100 dark:border-gray-800">
                                 <Link
                                     href={route('stock-adjustments.index')}
-                                    className="px-5 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl text-sm font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                                    className="px-6 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-md text-sm font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                                 >
                                     Batal
                                 </Link>
                                 <button
                                     type="submit"
-                                    disabled={processing}
-                                    className="px-6 py-2.5 bg-[#48CFA4] hover:bg-[#3bb890] text-white rounded-xl text-sm font-bold shadow-sm shadow-[#48CFA4]/20 transition-all disabled:opacity-50"
+                                    disabled={processing || !data.product_batch_id || data.actual_stock === ''}
+                                    className={MEDISYNC_BTN_CLASS}
                                 >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                    </svg>
                                     {processing ? 'Menyimpan...' : 'Simpan Penyesuaian Stok'}
                                 </button>
                             </div>
