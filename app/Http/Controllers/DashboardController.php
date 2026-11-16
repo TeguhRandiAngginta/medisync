@@ -77,6 +77,7 @@ class DashboardController extends Controller
         $topProducts = DB::table('sale_details')
             ->join('sales', 'sale_details.sale_id', '=', 'sales.id')
             ->join('medicines', 'sale_details.medicine_id', '=', 'medicines.id')
+            ->whereNull('sales.deleted_at')
             ->select('medicines.name', DB::raw('SUM(sale_details.quantity) as value'))
             ->groupBy('medicines.id', 'medicines.name')
             ->orderByDesc('value')
@@ -85,6 +86,7 @@ class DashboardController extends Controller
 
         $totalCompleted = Sale::count();
         $paymentStats = DB::table('sales')
+            ->whereNull('deleted_at')
             ->select('payment_method', DB::raw('COUNT(*) as count'))
             ->groupBy('payment_method')
             ->get();

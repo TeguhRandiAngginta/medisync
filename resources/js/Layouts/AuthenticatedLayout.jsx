@@ -71,7 +71,7 @@ export default function AuthenticatedLayout({ header, children }) {
         if (currentPath?.startsWith('dashboard')) setOpenMenu('dashboard');
         else if (currentPath?.startsWith('references') || currentPath?.startsWith('racks') || currentPath?.startsWith('suppliers') || currentPath?.startsWith('products')) setOpenMenu('master');
         // DIPERBAIKI: Menambahkan pengecekan 'batches' agar menu Inventaris & Gudang tetap terbuka
-        else if (currentPath?.startsWith('purchases') || currentPath?.startsWith('batches') || currentPath?.startsWith('stocks') || currentPath?.startsWith('audit-logs')) setOpenMenu('inventory');
+        else if (currentPath?.startsWith('purchases') || currentPath?.startsWith('batches') || currentPath?.startsWith('stocks') || currentPath?.startsWith('stock-adjustments') || currentPath?.startsWith('audit-logs')) setOpenMenu('inventory');
         else if (currentPath?.startsWith('pos') || currentPath?.startsWith('prescriptions') || currentPath?.startsWith('sales')) setOpenMenu('transaction');
         else if (currentPath?.startsWith('reports') || currentPath?.startsWith('users')) setOpenMenu('system');
     }, []);
@@ -193,6 +193,7 @@ export default function AuthenticatedLayout({ header, children }) {
                         <NavGroup id="inventory" label="Inventaris & Gudang" icon={Icons.Pembelian}>
                             <SubNavItem href={route('purchases.index')} path="purchases.*" label="Faktur Pembelian" />
                             <SubNavItem href={route('batches.index')} path="batches.*" label="Monitoring Batch & ED" />
+                            <SubNavItem href={route('stock-adjustments.index')} path="stock-adjustments.*" label="Stock Opname" />
                             {['superadmin'].includes(userRole) && (
                                 <SubNavItem href={route('audit-logs.index')} path="audit-logs.*" label="Audit Log" />
                             )}

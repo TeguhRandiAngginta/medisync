@@ -13,14 +13,14 @@ export default function SalesTable({ sales, isTrash, selectedIds, onSelectAll, o
     return (
         <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-                <thead className="bg-gray-50 dark:bg-[#151E24] text-gray-500 uppercase text-xs">
+                <thead className="bg-gray-50 dark:bg-[#151E24] text-gray-500 dark:text-gray-400 uppercase text-xs border-b border-gray-100 dark:border-gray-800">
                     <tr>
                         <th className="px-6 py-4 w-10">
                             <input 
                                 type="checkbox" 
                                 onChange={onSelectAll}
                                 checked={sales?.length > 0 && selectedIds.length === sales.length}
-                                className="rounded border-gray-300 text-[#48CFA4] focus:ring-[#48CFA4] w-4 h-4 cursor-pointer"
+                                className="rounded border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1E272E] text-[#48CFA4] focus:ring-[#48CFA4] w-4 h-4 cursor-pointer"
                             />
                         </th>
                         <th className="px-6 py-4">No. Invoice</th>
@@ -34,24 +34,24 @@ export default function SalesTable({ sales, isTrash, selectedIds, onSelectAll, o
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                     {!sales || sales.length === 0 ? (
                         <tr>
-                            <td colSpan="7" className="px-6 py-10 text-center text-gray-400">Belum ada data transaksi.</td>
+                            <td colSpan="7" className="px-6 py-10 text-center text-gray-400 dark:text-gray-500">Belum ada data transaksi.</td>
                         </tr>
                     ) : (
                         sales.map((sale) => (
-                            <tr key={sale.id} className={`hover:bg-gray-50 dark:hover:bg-[#151E24] ${selectedIds.includes(sale.id) ? 'bg-emerald-50/50 dark:bg-emerald-950/20' : ''}`}>
+                            <tr key={sale.id} className={`hover:bg-gray-50 dark:hover:bg-[#151E24] transition-colors ${selectedIds.includes(sale.id) ? 'bg-emerald-50/50 dark:bg-emerald-950/20' : ''}`}>
                                 <td className="px-6 py-4">
                                     <input 
                                         type="checkbox" 
                                         checked={selectedIds.includes(sale.id)}
                                         onChange={() => onSelectOne(sale.id)}
-                                        className="rounded border-gray-300 text-[#48CFA4] focus:ring-[#48CFA4] w-4 h-4 cursor-pointer"
+                                        className="rounded border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1E272E] text-[#48CFA4] focus:ring-[#48CFA4] w-4 h-4 cursor-pointer"
                                     />
                                 </td>
                                 <td className="px-6 py-4 font-mono font-bold text-[#48CFA4]">{sale.invoice_number}</td>
                                 <td className="px-6 py-4 text-gray-600 dark:text-gray-300">{new Date(sale.sale_date).toLocaleString('id-ID')}</td>
                                 <td className="px-6 py-4 text-gray-800 dark:text-gray-200">{sale.user?.name || 'Admin'}</td>
                                 <td className="px-6 py-4">
-                                    <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold uppercase">{sale.payment_method}</span>
+                                    <span className="px-2.5 py-1 bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 rounded-lg text-xs font-bold uppercase">{sale.payment_method}</span>
                                 </td>
                                 <td className="px-6 py-4 font-mono font-bold text-gray-800 dark:text-gray-200">{formatRupiah(sale.total_amount)}</td>
                                 <td className="px-6 py-4 text-center">
@@ -59,7 +59,7 @@ export default function SalesTable({ sales, isTrash, selectedIds, onSelectAll, o
                                         <button 
                                             onClick={() => onPrint(sale)}
                                             title="Cetak Struk"
-                                            className="p-2 bg-gray-100 dark:bg-gray-800 hover:bg-[#48CFA4] hover:text-white text-gray-600 dark:text-gray-300 rounded-xl transition-all"
+                                            className="p-2 bg-gray-100 dark:bg-[#151E24] hover:bg-[#48CFA4] hover:text-white dark:hover:bg-[#48CFA4] dark:hover:text-white text-gray-600 dark:text-gray-300 rounded-xl transition-all cursor-pointer"
                                         >
                                             <Icons.Print />
                                         </button>
@@ -69,14 +69,14 @@ export default function SalesTable({ sales, isTrash, selectedIds, onSelectAll, o
                                                 <button 
                                                     onClick={() => onRestore(sale.id)}
                                                     title="Pulihkan Transaksi"
-                                                    className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 rounded-xl transition-all"
+                                                    className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 rounded-xl transition-all cursor-pointer"
                                                 >
                                                     <Icons.Restore />
                                                 </button>
                                                 <button 
                                                     onClick={() => onForceDelete(sale.id)}
                                                     title="Hapus Permanen"
-                                                    className="p-2 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 rounded-xl transition-all"
+                                                    className="p-2 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 rounded-xl transition-all cursor-pointer"
                                                 >
                                                     <Icons.TrashSolid />
                                                 </button>
@@ -85,7 +85,7 @@ export default function SalesTable({ sales, isTrash, selectedIds, onSelectAll, o
                                             <button 
                                                 onClick={() => onDelete(sale.id)}
                                                 title="Hapus / Masukkan ke Sampah"
-                                                className="p-2 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 rounded-xl transition-all"
+                                                className="p-2 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 rounded-xl transition-all cursor-pointer"
                                             >
                                                 <Icons.Trash />
                                             </button>

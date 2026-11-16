@@ -20,6 +20,11 @@ export default function Index({ sales, isTrash, filters = {} }) {
     const [customDate, setCustomDate] = useState(filters?.date || '');
     const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', action: null });
 
+    useEffect(() => {
+        setFilterType(filters?.filter || 'all');
+        setCustomDate(filters?.date || '');
+    }, [filters?.filter, filters?.date]);
+
     const formatRupiah = (number) => {
         return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number || 0);
     };
