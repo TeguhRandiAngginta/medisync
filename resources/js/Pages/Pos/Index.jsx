@@ -157,7 +157,15 @@ export default function Index({ medicines, activeShift }) {
         const currentTotal = subtotal;
         const currentPaid = totalPaid;
         const currentChange = changeAmount;
-        const currentMethod = usedMethods.join(' + ') || 'Cash';
+
+        const methodParts = [];
+        if (payments.cash > 0) methodParts.push(`Cash: ${payments.cash}`);
+        if (payments.qris > 0) methodParts.push(`QRIS: ${payments.qris}`);
+        if (payments.transfer > 0) methodParts.push(`Transfer: ${payments.transfer}`);
+
+        const currentMethod = methodParts.length > 1
+            ? methodParts.join(' + ')
+            : (usedMethods[0] || 'Cash');
 
         router.post(route('pos.store'), {
             cart: cart,

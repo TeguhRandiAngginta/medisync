@@ -25,7 +25,7 @@ class StockAdjustmentController extends Controller
     public function create()
     {
         $medicines = Medicine::with(['batches' => function ($q) {
-            $q->orderBy('expiry_date', 'asc');
+            $q->orderBy('expired_date', 'asc');
         }])->get();
 
         return Inertia::render('StockOpname/Create', [

@@ -106,10 +106,26 @@ class UserController extends Controller
 
         $userName = $user->name;
         
+        $hasSales = \App\Models\Sale::where('user_id', $user->id)->exists();
+        $hasPurchases = \App\Models\Purchase::where('user_id', $user->id)->exists();
+        $hasCashRegisters = \App\Models\CashRegister::where('user_id', $user->id)->exists();
+
+        if ($hasSales || $hasPurchases || $hasCashRegisters) {
+            $user->update(['is_active' => false]);
+
+            AuditLog::record(
+                'akun', 
+                'UPDATE', 
+                "Menonaktifkan akun karyawan '{$userName}' karena memiliki riwayat transaksi/shift kasir."
+            );
+
+            return redirect()->route('users.index')->with('success', "Akun {$userName} memiliki riwayat transaksi sehingga dinonaktifkan (bukan dihapus permanen).");
+        }
+
         $user->delete();
 
-        \App\Models\AuditLog::record('akun', 'DELETE', "Menghapus akun karyawan secara permanen: {$userName}");
+        AuditLog::record('akun', 'DELETE', "Menghapus akun karyawan secara permanen: {$userName}");
 
-        return redirect()->route('users.index');
+        return redirect()->route('users.index')->with('success', "Akun {$userName} berhasil dihapus.");
     }
 }

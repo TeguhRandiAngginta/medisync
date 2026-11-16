@@ -15,36 +15,70 @@ class SalesHistoryController extends Controller
         $roleSlug = $user->role->slug ?? '';
 
         if (!in_array($roleSlug, ['superadmin', 'owner'])) {
-            abort(redirect()->back()->withErrors([
-                'authorization' => 'Akses Ditolak: Hanya Owner atau Superadmin yang memiliki hak akses untuk mengubah riwayat transaksi.'
-            ]));
+            abort(403, 'Unauthorized action.');
         }
     }
 
     public function index(Request $request)
     {
-        $sales = Sale::with(['user', 'details.medicine'])
-            ->orderBy('sale_date', 'desc')
+        $filter = $request->get('filter', 'all');
+        $date = $request->get('date');
+
+        $query = Sale::with(['user', 'details.medicine']);
+
+        if ($filter === 'today') {
+            $today = now()->timezone('Asia/Jakarta')->toDateString();
+            $query->whereDate('sale_date', $today);
+        } elseif ($filter === 'yesterday') {
+            $yesterday = now()->timezone('Asia/Jakarta')->subDay()->toDateString();
+            $query->whereDate('sale_date', $yesterday);
+        } elseif ($filter === 'custom' && !empty($date)) {
+            $query->whereDate('sale_date', $date);
+        }
+
+        $sales = $query->orderBy('sale_date', 'desc')
             ->paginate(15)
             ->withQueryString();
 
         return Inertia::render('Sales/Index', [
             'sales'   => $sales,
             'isTrash' => false,
+            'filters' => [
+                'filter' => $filter,
+                'date'   => $date,
+            ],
         ]);
     }
 
     public function trash(Request $request)
     {
-        $sales = Sale::onlyTrashed()
-            ->with(['user', 'details.medicine'])
-            ->orderBy('deleted_at', 'desc')
+        $filter = $request->get('filter', 'all');
+        $date = $request->get('date');
+
+        $query = Sale::onlyTrashed()
+            ->with(['user', 'details.medicine']);
+
+        if ($filter === 'today') {
+            $today = now()->timezone('Asia/Jakarta')->toDateString();
+            $query->whereDate('deleted_at', $today);
+        } elseif ($filter === 'yesterday') {
+            $yesterday = now()->timezone('Asia/Jakarta')->subDay()->toDateString();
+            $query->whereDate('deleted_at', $yesterday);
+        } elseif ($filter === 'custom' && !empty($date)) {
+            $query->whereDate('deleted_at', $date);
+        }
+
+        $sales = $query->orderBy('deleted_at', 'desc')
             ->paginate(15)
             ->withQueryString();
 
         return Inertia::render('Sales/Index', [
             'sales'   => $sales,
             'isTrash' => true,
+            'filters' => [
+                'filter' => $filter,
+                'date'   => $date,
+            ],
         ]);
     }
 
@@ -102,7 +136,7 @@ class SalesHistoryController extends Controller
         ]);
 
         DB::transaction(function () use ($request) {
-            Sale::onlyTrashed()->whereIn('id', $request->ids)->restore();
+            Sale::onlyTrashed()->whereIn('id', $request->ids)->get()->each->restore();
         });
 
         return redirect()->back()->with('success', count($request->ids) . ' transaksi berhasil dipulihkan.');

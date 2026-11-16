@@ -167,7 +167,7 @@ class PrescriptionController extends Controller
                         'medicine_id' => $medicine->id,
                         'name'        => $medicine->name,
                         'quantity'    => (int) ($item['quantity'] ?? 1),
-                        $item['signa'] ?? '3 x 1',
+                        'signa'       => $item['signa'] ?? '3 x 1',
                     ];
                 } else {
                     $searchKeyword = substr(trim($queryName), 0, 3);

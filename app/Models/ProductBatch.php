@@ -14,7 +14,7 @@ class ProductBatch extends Model
 
     public function product()
     {
-        return $this->belongsTo(Medicine::class, 'product_id');
+        return $this->belongsTo(Medicine::class, 'medicine_id');
     }
 
     public function purchaseDetail()

@@ -20,4 +20,9 @@ class SaleDetail extends Model
     {
         return $this->belongsTo(Medicine::class);
     }
+
+    public function batches()
+    {
+        return $this->hasMany(SaleDetailBatch::class);
+    }
 }

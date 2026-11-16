@@ -12,7 +12,7 @@ class Sale extends Model
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'invoice_number', 'user_id', 'total_amount', 'subtotal_amount',
+        'invoice_number', 'user_id', 'cash_register_id', 'total_amount', 'subtotal_amount',
         'discount_amount', 'paid_amount', 'change_amount', 'payment_method',
         'customer_name', 'sale_date', 'status'
     ];
@@ -27,13 +27,23 @@ class Sale extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function cashRegister()
+    {
+        return $this->belongsTo(CashRegister::class);
+    }
+
     protected static function booted()
     {
         static::deleting(function ($sale) {
             if (!$sale->isForceDeleting()) {
                 foreach ($sale->details as $detail) {
                     if ($detail->medicine_id && $detail->quantity > 0) {
-                        InventoryService::restoreStockFEFO($detail->medicine_id, $detail->quantity);
+                        InventoryService::restoreStockFEFO(
+                            $detail->medicine_id,
+                            $detail->quantity,
+                            $detail->batch_number,
+                            $detail->id
+                        );
                     }
                 }
             }
@@ -42,7 +52,16 @@ class Sale extends Model
         static::restored(function ($sale) {
             foreach ($sale->details as $detail) {
                 if ($detail->medicine_id && $detail->quantity > 0) {
-                    InventoryService::deductStockFEFO($detail->medicine_id, $detail->quantity);
+                    $deduction = InventoryService::deductStockFEFO($detail->medicine_id, $detail->quantity);
+                    if (is_array($deduction)) {
+                        $detail->update([
+                            'batch_number'   => $deduction['batch_number'] ?? $detail->batch_number,
+                            'purchase_price' => $deduction['unit_hpp'] ?? $detail->purchase_price,
+                        ]);
+                        if (!empty($deduction['batches'])) {
+                            InventoryService::recordSaleDetailBatches($detail->id, $deduction['batches']);
+                        }
+                    }
                 }
             }
         });
