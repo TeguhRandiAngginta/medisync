@@ -194,7 +194,7 @@ export default function Index({ currentTab, data }) {
                             </thead>
                             <tbody>
                                 {!data.locationTypes || data.locationTypes.length === 0 ? (
-                                    <tr><td colSpan="4" className="px-6 py-16 text-center text-gray-400">Belum ada data referensi.</td></tr>
+                                    <tr><td colSpan="4" className="px-6 py-16 text-center text-gray-400 dark:text-gray-500">Belum ada data referensi.</td></tr>
                                 ) : (
                                     data.locationTypes.map((type) => (
                                         <tr key={type.id} className="border-b border-gray-50 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-[#151E24]">
@@ -237,7 +237,7 @@ export default function Index({ currentTab, data }) {
                             </thead>
                             <tbody>
                                 {!data.supplierTypes || data.supplierTypes.length === 0 ? (
-                                    <tr><td colSpan="4" className="px-6 py-16 text-center text-gray-400">Belum ada tipe pemasok terdaftar.</td></tr>
+                                    <tr><td colSpan="4" className="px-6 py-16 text-center text-gray-400 dark:text-gray-500">Belum ada tipe pemasok terdaftar.</td></tr>
                                 ) : (
                                     data.supplierTypes.map((type) => (
                                         <tr key={type.id} className="border-b border-gray-50 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-[#151E24]">
@@ -280,7 +280,7 @@ export default function Index({ currentTab, data }) {
                             </thead>
                             <tbody>
                                 {!data.medicineCategories || data.medicineCategories.length === 0 ? (
-                                    <tr><td colSpan="4" className="px-6 py-16 text-center text-gray-400">Belum ada golongan obat terdaftar.</td></tr>
+                                    <tr><td colSpan="4" className="px-6 py-16 text-center text-gray-400 dark:text-gray-500">Belum ada golongan obat terdaftar.</td></tr>
                                 ) : (
                                     data.medicineCategories.map((cat) => (
                                         <tr key={cat.id} className="border-b border-gray-50 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-[#151E24]">
@@ -307,27 +307,27 @@ export default function Index({ currentTab, data }) {
             {/* --- MODAL LOKASI --- */}
             {isLocationModalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm" onClick={() => setIsLocationModalOpen(false)}></div>
-                    <div className="relative bg-white dark:bg-[#1E272E] rounded-3xl shadow-2xl w-full max-w-md p-6 border border-gray-100 dark:border-gray-800">
+                    <div className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm" onClick={() => setIsLocationModalOpen(false)}></div>
+                    <div className="relative bg-white dark:bg-[#1E272E] rounded-3xl shadow-2xl w-full max-w-md p-6 border border-gray-100 dark:border-gray-800 animate-in fade-in zoom-in duration-200">
                         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">{editingLocation ? 'Edit Tipe Lokasi' : 'Tambah Tipe Lokasi Baru'}</h3>
                         <form onSubmit={submitLocation} className="space-y-4">
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Prefix Kode</label>
-                                <input type="text" value={locationForm.data.prefix_code} onChange={e => locationForm.setData('prefix_code', e.target.value)} placeholder="Misal: KKS" className="w-full px-4 py-2 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-lg text-sm dark:text-white uppercase font-bold" required />
+                                <input type="text" value={locationForm.data.prefix_code} onChange={e => locationForm.setData('prefix_code', e.target.value)} placeholder="Misal: KKS" className="w-full px-4 py-2.5 bg-gray-50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-800 dark:text-white uppercase font-bold focus:ring-2 focus:ring-[#48CFA4] focus:border-transparent outline-none" required />
                                 <InputError message={locationForm.errors.prefix_code} />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Nama Tipe</label>
-                                <input type="text" value={locationForm.data.name} onChange={e => locationForm.setData('name', e.target.value)} required className="w-full px-4 py-2 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-lg text-sm dark:text-white" />
+                                <input type="text" value={locationForm.data.name} onChange={e => locationForm.setData('name', e.target.value)} required className="w-full px-4 py-2.5 bg-gray-50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-800 dark:text-white focus:ring-2 focus:ring-[#48CFA4] focus:border-transparent outline-none" />
                                 <InputError message={locationForm.errors.name} />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Peruntukan</label>
-                                <input type="text" value={locationForm.data.intended_for} onChange={e => locationForm.setData('intended_for', e.target.value)} className="w-full px-4 py-2 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-lg text-sm dark:text-white" />
+                                <input type="text" value={locationForm.data.intended_for} onChange={e => locationForm.setData('intended_for', e.target.value)} className="w-full px-4 py-2.5 bg-gray-50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-800 dark:text-white focus:ring-2 focus:ring-[#48CFA4] focus:border-transparent outline-none" />
                             </div>
                             <div className="flex gap-2 pt-4">
-                                <button type="button" onClick={() => setIsLocationModalOpen(false)} className="flex-1 px-4 py-2 bg-gray-100 dark:bg-[#151E24] rounded-lg font-bold text-sm">Batal</button>
-                                <button type="submit" disabled={locationForm.processing} className="flex-1 px-4 py-2 bg-[#48CFA4] text-white rounded-lg font-bold text-sm">Simpan</button>
+                                <button type="button" onClick={() => setIsLocationModalOpen(false)} className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-[#151E24] dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl font-bold text-sm transition-colors cursor-pointer">Batal</button>
+                                <button type="submit" disabled={locationForm.processing} className="flex-1 px-4 py-2.5 bg-[#48CFA4] hover:bg-[#3AB890] text-white rounded-xl font-bold text-sm shadow-md shadow-[#48CFA4]/20 transition-colors disabled:opacity-50 cursor-pointer">Simpan</button>
                             </div>
                         </form>
                     </div>
@@ -337,27 +337,27 @@ export default function Index({ currentTab, data }) {
             {/* --- MODAL SUPPLIER --- */}
             {isSupplierModalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm" onClick={() => setIsSupplierModalOpen(false)}></div>
-                    <div className="relative bg-white dark:bg-[#1E272E] rounded-3xl shadow-2xl w-full max-w-md p-6 border border-gray-100 dark:border-gray-800">
+                    <div className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm" onClick={() => setIsSupplierModalOpen(false)}></div>
+                    <div className="relative bg-white dark:bg-[#1E272E] rounded-3xl shadow-2xl w-full max-w-md p-6 border border-gray-100 dark:border-gray-800 animate-in fade-in zoom-in duration-200">
                         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">{editingSupplierType ? 'Edit Tipe Pemasok' : 'Tambah Tipe Pemasok Baru'}</h3>
                         <form onSubmit={submitSupplierType} className="space-y-4">
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Prefix Kode</label>
-                                <input type="text" value={supplierForm.data.prefix_code} onChange={e => supplierForm.setData('prefix_code', e.target.value)} placeholder="Misal: PBF" className="w-full px-4 py-2 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-lg text-sm dark:text-white uppercase font-bold" required />
+                                <input type="text" value={supplierForm.data.prefix_code} onChange={e => supplierForm.setData('prefix_code', e.target.value)} placeholder="Misal: PBF" className="w-full px-4 py-2.5 bg-gray-50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-800 dark:text-white uppercase font-bold focus:ring-2 focus:ring-[#48CFA4] focus:border-transparent outline-none" required />
                                 <InputError message={supplierForm.errors.prefix_code} />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Kategori Pemasok</label>
-                                <input type="text" value={supplierForm.data.name} onChange={e => supplierForm.setData('name', e.target.value)} placeholder="Misal: Pedagang Besar Farmasi" required className="w-full px-4 py-2 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-lg text-sm dark:text-white" />
+                                <input type="text" value={supplierForm.data.name} onChange={e => supplierForm.setData('name', e.target.value)} placeholder="Misal: Pedagang Besar Farmasi" required className="w-full px-4 py-2.5 bg-gray-50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-800 dark:text-white focus:ring-2 focus:ring-[#48CFA4] focus:border-transparent outline-none" />
                                 <InputError message={supplierForm.errors.name} />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Keterangan Tambahan</label>
-                                <textarea value={supplierForm.data.description} onChange={e => supplierForm.setData('description', e.target.value)} className="w-full px-4 py-2 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-lg text-sm dark:text-white"></textarea>
+                                <textarea value={supplierForm.data.description} onChange={e => supplierForm.setData('description', e.target.value)} className="w-full px-4 py-2.5 bg-gray-50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-800 dark:text-white focus:ring-2 focus:ring-[#48CFA4] focus:border-transparent outline-none"></textarea>
                             </div>
                             <div className="flex gap-2 pt-4">
-                                <button type="button" onClick={() => setIsSupplierModalOpen(false)} className="flex-1 px-4 py-2 bg-gray-100 dark:bg-[#151E24] rounded-lg font-bold text-sm">Batal</button>
-                                <button type="submit" disabled={supplierForm.processing} className="flex-1 px-4 py-2 bg-[#48CFA4] text-white rounded-lg font-bold text-sm">Simpan</button>
+                                <button type="button" onClick={() => setIsSupplierModalOpen(false)} className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-[#151E24] dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl font-bold text-sm transition-colors cursor-pointer">Batal</button>
+                                <button type="submit" disabled={supplierForm.processing} className="flex-1 px-4 py-2.5 bg-[#48CFA4] hover:bg-[#3AB890] text-white rounded-xl font-bold text-sm shadow-md shadow-[#48CFA4]/20 transition-colors disabled:opacity-50 cursor-pointer">Simpan</button>
                             </div>
                         </form>
                     </div>
@@ -367,22 +367,22 @@ export default function Index({ currentTab, data }) {
             {/* --- MODAL GOLONGAN OBAT --- */}
             {isCategoryModalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm" onClick={() => setIsCategoryModalOpen(false)}></div>
-                    <div className="relative bg-white dark:bg-[#1E272E] rounded-3xl shadow-2xl w-full max-w-md p-6 border border-gray-100 dark:border-gray-800">
+                    <div className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm" onClick={() => setIsCategoryModalOpen(false)}></div>
+                    <div className="relative bg-white dark:bg-[#1E272E] rounded-3xl shadow-2xl w-full max-w-md p-6 border border-gray-100 dark:border-gray-800 animate-in fade-in zoom-in duration-200">
                         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">{editingCategory ? 'Edit Golongan Obat' : 'Tambah Golongan Baru'}</h3>
                         <form onSubmit={submitCategory} className="space-y-4">
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Nama Golongan Obat</label>
-                                <input type="text" value={categoryForm.data.name} onChange={e => categoryForm.setData('name', e.target.value)} placeholder="Misal: Obat Bebas, Obat Keras" className="w-full px-4 py-2 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-lg text-sm dark:text-white font-bold" required />
+                                <input type="text" value={categoryForm.data.name} onChange={e => categoryForm.setData('name', e.target.value)} placeholder="Misal: Obat Bebas, Obat Keras" className="w-full px-4 py-2.5 bg-gray-50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-800 dark:text-white font-bold focus:ring-2 focus:ring-[#48CFA4] focus:border-transparent outline-none" required />
                                 <InputError message={categoryForm.errors.name} />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Keterangan (Opsional)</label>
-                                <textarea value={categoryForm.data.description} onChange={e => categoryForm.setData('description', e.target.value)} className="w-full px-4 py-2 bg-gray-50 dark:bg-[#151E24] border-transparent rounded-lg text-sm dark:text-white"></textarea>
+                                <textarea value={categoryForm.data.description} onChange={e => categoryForm.setData('description', e.target.value)} className="w-full px-4 py-2.5 bg-gray-50 dark:bg-[#151E24] border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-800 dark:text-white focus:ring-2 focus:ring-[#48CFA4] focus:border-transparent outline-none"></textarea>
                             </div>
                             <div className="flex gap-2 pt-4">
-                                <button type="button" onClick={() => setIsCategoryModalOpen(false)} className="flex-1 px-4 py-2 bg-gray-100 dark:bg-[#151E24] rounded-lg font-bold text-sm">Batal</button>
-                                <button type="submit" disabled={categoryForm.processing} className="flex-1 px-4 py-2 bg-[#48CFA4] text-white rounded-lg font-bold text-sm">Simpan</button>
+                                <button type="button" onClick={() => setIsCategoryModalOpen(false)} className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-[#151E24] dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl font-bold text-sm transition-colors cursor-pointer">Batal</button>
+                                <button type="submit" disabled={categoryForm.processing} className="flex-1 px-4 py-2.5 bg-[#48CFA4] hover:bg-[#3AB890] text-white rounded-xl font-bold text-sm shadow-md shadow-[#48CFA4]/20 transition-colors disabled:opacity-50 cursor-pointer">Simpan</button>
                             </div>
                         </form>
                     </div>

@@ -24,6 +24,7 @@ class Medicine extends Model
         'base_unit',
         'min_stock',
         'max_stock',
+        'stock',
         'is_active',
         'selling_price',
     ];
