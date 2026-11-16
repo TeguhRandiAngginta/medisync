@@ -15,14 +15,21 @@ use Inertia\Inertia;
 
 class PrescriptionController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $prescriptions = Prescription::with(['user', 'items.medicine'])
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $trashed = $request->boolean('trashed', false);
+
+        $query = Prescription::with(['user', 'items.medicine'])
+            ->when($trashed, fn($q) => $q->onlyTrashed(), fn($q) => $q->withoutTrashed())
+            ->orderBy($trashed ? 'deleted_at' : 'created_at', 'desc');
+
+        $prescriptions = $query->get();
+        $trashedCount = Prescription::onlyTrashed()->count();
 
         return Inertia::render('Prescription/Index', [
-            'prescriptions' => $prescriptions
+            'prescriptions' => $prescriptions,
+            'trashed'      => $trashed,
+            'trashedCount' => $trashedCount,
         ]);
     }
 
@@ -205,17 +212,188 @@ class PrescriptionController extends Controller
     public function destroy(Prescription $prescription)
     {
         $prescriptionNumber = $prescription->prescription_number;
-        $prescription->delete();
 
-        if (class_exists(AuditLog::class)) {
-            AuditLog::record(
-                'resep', 
-                'DELETE', 
-                "Menghapus/membatalkan resep masuk No: {$prescriptionNumber}."
-            );
+        DB::beginTransaction();
+        try {
+            $prescription->items()->delete();
+            $prescription->delete();
+
+            if (class_exists(AuditLog::class)) {
+                AuditLog::record(
+                    'resep', 
+                    'DELETE', 
+                    "Memindahkan resep masuk No: {$prescriptionNumber} ke keranjang sampah."
+                );
+            }
+
+            DB::commit();
+            return redirect()->route('prescriptions.index')->with('success', "Resep {$prescriptionNumber} berhasil dipindahkan ke tong sampah.");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal memindahkan resep: ' . $e->getMessage()]);
         }
+    }
 
-        return redirect()->route('prescriptions.index')->with('success', 'Resep berhasil dihapus.');
+    public function restore($id)
+    {
+        DB::beginTransaction();
+        try {
+            $prescription = Prescription::onlyTrashed()->findOrFail($id);
+            $prescription->restore();
+            PrescriptionItem::onlyTrashed()->where('prescription_id', $prescription->id)->restore();
+
+            if (class_exists(AuditLog::class)) {
+                AuditLog::record(
+                    'resep', 
+                    'RESTORE', 
+                    "Memulihkan arsip resep masuk No: {$prescription->prescription_number} dari keranjang sampah."
+                );
+            }
+
+            DB::commit();
+            return redirect()->route('prescriptions.index', ['trashed' => true])
+                ->with('success', "Resep {$prescription->prescription_number} berhasil dipulihkan.");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal memulihkan resep: ' . $e->getMessage()]);
+        }
+    }
+
+    public function forceDelete($id)
+    {
+        DB::beginTransaction();
+        try {
+            $prescription = Prescription::onlyTrashed()->findOrFail($id);
+
+            // Validasi: jika status DISPENSED (sudah ditebus di POS), tolak hapus permanen agar audit medis terjaga
+            if ($prescription->status === 'DISPENSED') {
+                DB::rollBack();
+                return back()->withErrors([
+                    'message' => "Aksi Ditolak: Resep '{$prescription->prescription_number}' berstatus DISPENSED (sudah pernah ditebus di Kasir) sehingga tidak dapat dihapus secara permanen."
+                ]);
+            }
+
+            $number = $prescription->prescription_number;
+            PrescriptionItem::onlyTrashed()->where('prescription_id', $prescription->id)->forceDelete();
+            $prescription->forceDelete();
+
+            if (class_exists(AuditLog::class)) {
+                AuditLog::record(
+                    'resep', 
+                    'FORCE DELETE', 
+                    "Menghapus PERMANEN resep masuk No: {$number} dari database."
+                );
+            }
+
+            DB::commit();
+            return redirect()->route('prescriptions.index', ['trashed' => true])
+                ->with('success', "Resep {$number} berhasil dihapus secara permanen.");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal menghapus permanen: ' . $e->getMessage()]);
+        }
+    }
+
+    public function bulkDestroy(Request $request)
+    {
+        $validated = $request->validate([
+            'ids'   => 'required|array',
+            'ids.*' => 'exists:prescriptions,id',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $prescriptions = Prescription::whereIn('id', $validated['ids'])->get();
+            foreach ($prescriptions as $p) {
+                $p->items()->delete();
+                $p->delete();
+            }
+
+            if (class_exists(AuditLog::class)) {
+                AuditLog::record('resep', 'BULK_DELETE', 'Memindahkan ' . count($prescriptions) . ' resep masuk ke keranjang sampah.');
+            }
+
+            DB::commit();
+            return redirect()->route('prescriptions.index')->with('success', count($prescriptions) . ' resep berhasil dipindahkan ke keranjang sampah.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal menghapus massal: ' . $e->getMessage()]);
+        }
+    }
+
+    public function bulkRestore(Request $request)
+    {
+        $validated = $request->validate([
+            'ids'   => 'required|array',
+            'ids.*' => 'integer',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $prescriptions = Prescription::onlyTrashed()->whereIn('id', $validated['ids'])->get();
+            foreach ($prescriptions as $p) {
+                $p->restore();
+                PrescriptionItem::onlyTrashed()->where('prescription_id', $p->id)->restore();
+            }
+
+            if (class_exists(AuditLog::class)) {
+                AuditLog::record('resep', 'BULK_RESTORE', 'Memulihkan ' . count($prescriptions) . ' resep masuk dari keranjang sampah.');
+            }
+
+            DB::commit();
+            return redirect()->route('prescriptions.index', ['trashed' => true])
+                ->with('success', count($prescriptions) . ' resep berhasil dipulihkan.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal memulihkan massal: ' . $e->getMessage()]);
+        }
+    }
+
+    public function bulkForceDelete(Request $request)
+    {
+        $validated = $request->validate([
+            'ids'   => 'required|array',
+            'ids.*' => 'integer',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $prescriptions = Prescription::onlyTrashed()->whereIn('id', $validated['ids'])->get();
+            $deletedCount = 0;
+            $failedNumbers = [];
+
+            foreach ($prescriptions as $p) {
+                if ($p->status === 'DISPENSED') {
+                    $failedNumbers[] = "{$p->prescription_number} (status DISPENSED)";
+                    continue;
+                }
+
+                $number = $p->prescription_number;
+                PrescriptionItem::onlyTrashed()->where('prescription_id', $p->id)->forceDelete();
+                $p->forceDelete();
+                AuditLog::record('resep', 'FORCE DELETE', "Menghapus PERMANEN resep masuk No: {$number} (bulk)");
+                $deletedCount++;
+            }
+
+            if (count($failedNumbers) > 0 && $deletedCount === 0) {
+                DB::rollBack();
+                return back()->withErrors([
+                    'message' => 'Seluruh resep terpilih tidak dapat dihapus permanen karena sudah pernah ditebus di Kasir: ' . implode('; ', $failedNumbers) . '.'
+                ]);
+            }
+
+            DB::commit();
+
+            $message = "{$deletedCount} resep berhasil dihapus secara permanen.";
+            if (count($failedNumbers) > 0) {
+                $message .= ' Namun ' . count($failedNumbers) . ' resep dilewati karena sudah ditebus: ' . implode('; ', $failedNumbers) . '.';
+            }
+
+            return redirect()->route('prescriptions.index', ['trashed' => true])->with('success', $message);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal hapus permanen massal: ' . $e->getMessage()]);
+        }
     }
 
     public function edit(Prescription $prescription)

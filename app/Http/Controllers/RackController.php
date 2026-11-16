@@ -137,7 +137,7 @@ class RackController extends Controller
             if ($medicineCount > 0) {
                 DB::rollBack();
                 return back()->withErrors([
-                    'message' => "Tidak dapat dihapus permanen: Rak '{$rack->name}' masih terhubung dengan {$medicineCount} data obat."
+                    'message' => "Aksi Ditolak: Lokasi rak '{$rack->name}' ({$rack->code}) tidak dapat dihapus secara permanen karena masih terhubung dengan {$medicineCount} data katalog obat pada tabel 'medicines' (termasuk obat di dalam Trash)."
                 ]);
             }
 
@@ -200,6 +200,53 @@ class RackController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['message' => 'Gagal pulihkan massal: ' . $e->getMessage()]);
+        }
+    }
+
+    public function bulkForceDelete(Request $request)
+    {
+        $validated = $request->validate([
+            'ids'   => 'required|array',
+            'ids.*' => 'integer',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $racks = Rack::onlyTrashed()->whereIn('id', $validated['ids'])->get();
+            $deletedCount = 0;
+            $failedNames = [];
+
+            foreach ($racks as $rack) {
+                $medicineCount = \App\Models\Medicine::withTrashed()->where('rack_id', $rack->id)->count();
+                if ($medicineCount > 0) {
+                    $failedNames[] = "{$rack->name} ({$medicineCount} obat pada medicines)";
+                    continue;
+                }
+
+                $name = $rack->name;
+                $rack->forceDelete();
+                AuditLog::record('rak', 'FORCE DELETE', "Menghapus PERMANEN lokasi rak: {$name} (bulk)");
+                $deletedCount++;
+            }
+
+            if (count($failedNames) > 0 && $deletedCount === 0) {
+                DB::rollBack();
+                return back()->withErrors([
+                    'message' => 'Seluruh lokasi rak terpilih tidak dapat dihapus permanen karena masih terhubung dengan katalog obat: ' . implode('; ', $failedNames) . ' (termasuk obat di dalam Trash).'
+                ]);
+            }
+
+            DB::commit();
+
+            $message = "{$deletedCount} lokasi rak berhasil dihapus secara permanen.";
+            if (count($failedNames) > 0) {
+                $message .= ' Namun ' . count($failedNames) . ' lokasi rak dilewati karena masih terhubung dengan katalog obat: ' . implode('; ', $failedNames) . '.';
+            }
+
+            return redirect()->route('racks.index', ['trashed' => true])->with('success', $message);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal hapus permanen massal: ' . $e->getMessage()]);
         }
     }
 }

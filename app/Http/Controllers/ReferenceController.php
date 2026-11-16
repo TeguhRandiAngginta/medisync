@@ -125,7 +125,7 @@ class ReferenceController extends Controller
             if ($usedCount > 0) {
                 DB::rollBack();
                 return back()->withErrors([
-                    'message' => "Tidak dapat dihapus permanen: Tipe lokasi '{$locationType->name}' masih terhubung dengan {$usedCount} data rak/etalase."
+                    'message' => "Aksi Ditolak: Tipe lokasi '{$locationType->name}' ({$locationType->prefix_code}) tidak dapat dihapus secara permanen karena masih terhubung dengan {$usedCount} data rak/etalase pada tabel 'racks' (termasuk rak di dalam Trash)."
                 ]);
             }
 
@@ -182,6 +182,53 @@ class ReferenceController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['message' => 'Gagal pulihkan massal: ' . $e->getMessage()]);
+        }
+    }
+
+    public function bulkForceDeleteLocationType(Request $request)
+    {
+        $validated = $request->validate([
+            'ids'   => 'required|array',
+            'ids.*' => 'integer',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $types = LocationType::onlyTrashed()->whereIn('id', $validated['ids'])->get();
+            $deletedCount = 0;
+            $failedNames = [];
+
+            foreach ($types as $type) {
+                $usedCount = \App\Models\Rack::withTrashed()->where('location_type_id', $type->id)->count();
+                if ($usedCount > 0) {
+                    $failedNames[] = "{$type->name} ({$usedCount} rak pada racks)";
+                    continue;
+                }
+
+                $name = $type->name;
+                $type->forceDelete();
+                AuditLog::record('referensi', 'FORCE DELETE', "Menghapus PERMANEN tipe lokasi: {$name} (bulk)");
+                $deletedCount++;
+            }
+
+            if (count($failedNames) > 0 && $deletedCount === 0) {
+                DB::rollBack();
+                return back()->withErrors([
+                    'message' => 'Seluruh tipe lokasi terpilih tidak dapat dihapus permanen karena masih terhubung dengan data rak/etalase: ' . implode('; ', $failedNames) . ' (termasuk rak di dalam Trash).'
+                ]);
+            }
+
+            DB::commit();
+
+            $message = "{$deletedCount} tipe lokasi berhasil dihapus secara permanen.";
+            if (count($failedNames) > 0) {
+                $message .= ' Namun ' . count($failedNames) . ' tipe lokasi dilewati karena masih terhubung dengan data rak/etalase: ' . implode('; ', $failedNames) . '.';
+            }
+
+            return back()->with('success', $message);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal hapus permanen massal: ' . $e->getMessage()]);
         }
     }
 
@@ -257,7 +304,7 @@ class ReferenceController extends Controller
             if ($usedCount > 0) {
                 DB::rollBack();
                 return back()->withErrors([
-                    'message' => "Tidak dapat dihapus permanen: Tipe supplier '{$supplierType->name}' masih terhubung dengan {$usedCount} data pemasok."
+                    'message' => "Aksi Ditolak: Tipe supplier '{$supplierType->name}' ({$supplierType->prefix_code}) tidak dapat dihapus secara permanen karena masih terhubung dengan {$usedCount} data pemasok pada tabel 'suppliers' (termasuk pemasok di dalam Trash)."
                 ]);
             }
 
@@ -314,6 +361,53 @@ class ReferenceController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['message' => 'Gagal pulihkan massal: ' . $e->getMessage()]);
+        }
+    }
+
+    public function bulkForceDeleteSupplierType(Request $request)
+    {
+        $validated = $request->validate([
+            'ids'   => 'required|array',
+            'ids.*' => 'integer',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $types = SupplierType::onlyTrashed()->whereIn('id', $validated['ids'])->get();
+            $deletedCount = 0;
+            $failedNames = [];
+
+            foreach ($types as $type) {
+                $usedCount = Supplier::withTrashed()->where('supplier_type_id', $type->id)->count();
+                if ($usedCount > 0) {
+                    $failedNames[] = "{$type->name} ({$usedCount} pemasok pada suppliers)";
+                    continue;
+                }
+
+                $name = $type->name;
+                $type->forceDelete();
+                AuditLog::record('referensi', 'FORCE DELETE', "Menghapus PERMANEN tipe supplier: {$name} (bulk)");
+                $deletedCount++;
+            }
+
+            if (count($failedNames) > 0 && $deletedCount === 0) {
+                DB::rollBack();
+                return back()->withErrors([
+                    'message' => 'Seluruh tipe supplier terpilih tidak dapat dihapus permanen karena masih terhubung dengan data pemasok: ' . implode('; ', $failedNames) . ' (termasuk pemasok di dalam Trash).'
+                ]);
+            }
+
+            DB::commit();
+
+            $message = "{$deletedCount} tipe supplier berhasil dihapus secara permanen.";
+            if (count($failedNames) > 0) {
+                $message .= ' Namun ' . count($failedNames) . ' tipe supplier dilewati karena masih terhubung dengan data pemasok: ' . implode('; ', $failedNames) . '.';
+            }
+
+            return back()->with('success', $message);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal hapus permanen massal: ' . $e->getMessage()]);
         }
     }
 
@@ -382,7 +476,7 @@ class ReferenceController extends Controller
             $usedCount = \App\Models\Medicine::withTrashed()->where('medicine_category_id', $category->id)->count();
             if ($usedCount > 0) {
                 DB::rollBack();
-                return back()->withErrors(['message' => "Tidak dapat menghapus permanen: Golongan obat '{$category->name}' masih terhubung dengan {$usedCount} data obat."]);
+                return back()->withErrors(['message' => "Aksi Ditolak: Golongan obat '{$category->name}' tidak dapat dihapus secara permanen karena masih terhubung dengan {$usedCount} data obat pada tabel 'medicines' (termasuk obat di dalam Trash)."]);
             }
 
             $name = $category->name;
@@ -438,6 +532,53 @@ class ReferenceController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['message' => 'Gagal pulihkan massal: ' . $e->getMessage()]);
+        }
+    }
+
+    public function bulkForceDeleteMedicineCategory(Request $request)
+    {
+        $validated = $request->validate([
+            'ids'   => 'required|array',
+            'ids.*' => 'integer',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $categories = MedicineCategory::onlyTrashed()->whereIn('id', $validated['ids'])->get();
+            $deletedCount = 0;
+            $failedNames = [];
+
+            foreach ($categories as $cat) {
+                $usedCount = \App\Models\Medicine::withTrashed()->where('medicine_category_id', $cat->id)->count();
+                if ($usedCount > 0) {
+                    $failedNames[] = "{$cat->name} ({$usedCount} obat pada medicines)";
+                    continue;
+                }
+
+                $name = $cat->name;
+                $cat->forceDelete();
+                AuditLog::record('referensi', 'FORCE DELETE', "Menghapus PERMANEN golongan obat: {$name} (bulk)");
+                $deletedCount++;
+            }
+
+            if (count($failedNames) > 0 && $deletedCount === 0) {
+                DB::rollBack();
+                return back()->withErrors([
+                    'message' => 'Seluruh golongan obat terpilih tidak dapat dihapus permanen karena masih terhubung dengan data obat: ' . implode('; ', $failedNames) . ' (termasuk obat di dalam Trash).'
+                ]);
+            }
+
+            DB::commit();
+
+            $message = "{$deletedCount} golongan obat berhasil dihapus secara permanen.";
+            if (count($failedNames) > 0) {
+                $message .= ' Namun ' . count($failedNames) . ' golongan obat dilewati karena masih terhubung dengan data obat: ' . implode('; ', $failedNames) . '.';
+            }
+
+            return back()->with('success', $message);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal hapus permanen massal: ' . $e->getMessage()]);
         }
     }
 }

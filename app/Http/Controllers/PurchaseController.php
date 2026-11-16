@@ -26,16 +26,23 @@ class PurchaseController extends Controller
         }
     }
 
-    public function index()
+    public function index(Request $request)
     {
+        $trashed = $request->boolean('trashed', false);
+
         $purchases = Purchase::with(['supplier', 'user', 'details.medicine' => function($q) {
             $q->withTrashed();
         }])
-        ->latest()
+        ->when($trashed, fn($q) => $q->onlyTrashed(), fn($q) => $q->withoutTrashed())
+        ->latest($trashed ? 'deleted_at' : 'created_at')
         ->get();
 
+        $trashedCount = Purchase::onlyTrashed()->count();
+
         return Inertia::render('Purchases/Index', [
-            'purchases' => $purchases
+            'purchases'    => $purchases,
+            'trashed'      => $trashed,
+            'trashedCount' => $trashedCount,
         ]);
     }
 
@@ -328,6 +335,84 @@ class PurchaseController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['message' => 'Gagal menghapus permanen data: ' . $e->getMessage()]);
+        }
+    }
+
+    public function bulkRestore(Request $request)
+    {
+        $this->checkOwnerAccess();
+
+        $validated = $request->validate([
+            'ids'   => 'required|array',
+            'ids.*' => 'integer',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $purchases = Purchase::onlyTrashed()->with('details')->whereIn('id', $validated['ids'])->get();
+            $affectedMedicineIds = [];
+
+            foreach ($purchases as $purchase) {
+                $purchase->restore();
+                foreach ($purchase->details as $detail) {
+                    $affectedMedicineIds[] = $detail->medicine_id;
+                    ProductBatch::onlyTrashed()
+                        ->where('purchase_detail_id', $detail->id)
+                        ->restore();
+                }
+            }
+
+            $uniqueMedicineIds = array_unique($affectedMedicineIds);
+            foreach ($uniqueMedicineIds as $medicineId) {
+                InventoryService::syncMedicineStock($medicineId);
+            }
+
+            if (class_exists(\App\Models\AuditLog::class)) {
+                \App\Models\AuditLog::record('pembelian', 'BULK_RESTORE', 'Memulihkan ' . count($purchases) . ' faktur pembelian dan batch stok dari tong sampah.');
+            }
+
+            DB::commit();
+            return redirect()->route('purchases.index', ['trashed' => true])
+                ->with('success', count($purchases) . ' faktur pembelian berhasil dipulihkan.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal memulihkan massal: ' . $e->getMessage()]);
+        }
+    }
+
+    public function bulkForceDelete(Request $request)
+    {
+        $this->checkOwnerAccess();
+
+        $validated = $request->validate([
+            'ids'   => 'required|array',
+            'ids.*' => 'integer',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $purchases = Purchase::onlyTrashed()->with('details')->whereIn('id', $validated['ids'])->get();
+            $count = $purchases->count();
+
+            foreach ($purchases as $purchase) {
+                foreach ($purchase->details as $detail) {
+                    ProductBatch::onlyTrashed()->where('purchase_detail_id', $detail->id)->forceDelete();
+                    InventoryService::syncMedicineStock($detail->medicine_id);
+                }
+                $purchase->details()->delete();
+                $purchase->forceDelete();
+            }
+
+            if (class_exists(AuditLog::class)) {
+                AuditLog::record('pembelian', 'FORCE DELETE', "Menghapus PERMANEN {$count} faktur pembelian dari database (bulk).");
+            }
+
+            DB::commit();
+            return redirect()->route('purchases.index', ['trashed' => true])
+                ->with('success', "{$count} faktur pembelian berhasil dihapus secara permanen.");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal hapus permanen massal: ' . $e->getMessage()]);
         }
     }
 

@@ -28,6 +28,7 @@ export default function Index({ racks, trashed, trashedCount }) {
     const [confirmForceDelete, setConfirmForceDelete]   = useState(null);       // rack object
     const [confirmBulkDelete, setConfirmBulkDelete]     = useState(false);
     const [confirmBulkRestore, setConfirmBulkRestore]   = useState(false);
+    const [confirmBulkForceDelete, setConfirmBulkForceDelete] = useState(false);
 
     const switchTab = (toTrash) => {
         setSelectedIds([]);
@@ -80,6 +81,14 @@ export default function Index({ racks, trashed, trashedCount }) {
         });
     };
 
+    const executeBulkForceDelete = () => {
+        router.post(route('racks.bulk-force-delete'), { ids: selectedIds }, {
+            preserveScroll: true,
+            onSuccess: () => { setConfirmBulkForceDelete(false); setSelectedIds([]); },
+            onError: () => setConfirmBulkForceDelete(false),
+        });
+    };
+
     return (
         <AuthenticatedLayout header="Lokasi Rak Penyimpanan">
             <Head title="Data Rak" />
@@ -94,11 +103,18 @@ export default function Index({ racks, trashed, trashedCount }) {
                 <div className="flex items-center gap-2 flex-wrap">
                     {/* Bulk Actions */}
                     {selectedIds.length > 0 && trashed && (
-                        <button onClick={() => setConfirmBulkRestore(true)}
-                            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all font-bold text-xs tracking-wide cursor-pointer shadow-md shadow-blue-600/20">
-                            <RestoreIcon />
-                            <span>Pulihkan ({selectedIds.length})</span>
-                        </button>
+                        <>
+                            <button onClick={() => setConfirmBulkRestore(true)}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all font-bold text-xs tracking-wide cursor-pointer shadow-md shadow-blue-600/20">
+                                <RestoreIcon />
+                                <span>Pulihkan ({selectedIds.length})</span>
+                            </button>
+                            <button onClick={() => setConfirmBulkForceDelete(true)}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all font-bold text-xs tracking-wide cursor-pointer shadow-md shadow-red-600/20">
+                                <TrashIcon />
+                                <span>Hapus Permanen ({selectedIds.length})</span>
+                            </button>
+                        </>
                     )}
                     {selectedIds.length > 0 && !trashed && (
                         <button onClick={() => setConfirmBulkDelete(true)}
@@ -114,11 +130,24 @@ export default function Index({ racks, trashed, trashedCount }) {
                             className={`px-4 py-2.5 text-xs font-bold transition-colors ${!trashed ? 'bg-[#48CFA4] text-white dark:bg-[#253939] dark:text-[#67E2B4]' : 'bg-white dark:bg-[#1E272E] text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#151E24]'}`}>
                             Data Aktif
                         </button>
-                        <button onClick={() => switchTab(true)}
-                            className={`px-4 py-2.5 text-xs font-bold transition-colors flex items-center gap-2 ${trashed ? 'bg-red-500 text-white' : 'bg-white dark:bg-[#1E272E] text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#151E24]'}`}>
-                            🗑️ Trash
+                        <button
+                            onClick={() => switchTab(true)}
+                            className={`px-4 py-2.5 text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer ${
+                                trashed
+                                    ? 'bg-red-500 text-white'
+                                    : 'bg-white dark:bg-[#1E272E] text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#151E24]'
+                            }`}
+                        >
+                            <TrashIcon />
+                            <span>Trash</span>
                             {trashedCount > 0 && (
-                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${trashed ? 'bg-white/20 text-white' : 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400'}`}>
+                                <span
+                                    className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                                        trashed
+                                            ? 'bg-white/20 text-white'
+                                            : 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400'
+                                    }`}
+                                >
                                     {trashedCount}
                                 </span>
                             )}
@@ -319,6 +348,30 @@ export default function Index({ racks, trashed, trashedCount }) {
                                 className="px-6 py-2.5 bg-blue-600 text-white rounded-2xl text-sm font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/30 cursor-pointer">
                                 Ya, Pulihkan Semua
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL: Bulk Force Delete */}
+            {confirmBulkForceDelete && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-[#1E272E] p-8 rounded-3xl shadow-2xl max-w-md w-full mx-4 border border-gray-100 dark:border-gray-800 text-center">
+                        <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg className="w-8 h-8" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            </svg>
+                        </div>
+                        <h3 className="text-lg font-extrabold text-gray-800 dark:text-gray-100 mb-2">Hapus Permanen {selectedIds.length} Lokasi Rak Terpilih?</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                            Semua lokasi rak yang dicentang akan dihapus <span className="font-black text-red-600">PERMANEN</span> dari database (lokasi yang masih terhubung dengan data obat akan otomatis dilewati).
+                        </p>
+                        <p className="text-xs text-red-500 dark:text-red-400 mb-6 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg">⚠️ Tindakan ini tidak dapat dibatalkan!</p>
+                        <div className="flex justify-center gap-3">
+                            <button onClick={() => setConfirmBulkForceDelete(false)}
+                                className="px-6 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-2xl text-sm font-bold hover:bg-gray-200 transition-colors cursor-pointer">Batal</button>
+                            <button onClick={executeBulkForceDelete}
+                                className="px-6 py-2.5 bg-red-700 text-white rounded-2xl text-sm font-bold hover:bg-red-800 transition-colors shadow-lg shadow-red-700/30 cursor-pointer">Hapus Permanen</button>
                         </div>
                     </div>
                 </div>

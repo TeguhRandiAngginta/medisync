@@ -37,7 +37,10 @@ function ForceDeleteModal({ item, entityLabel, onClose, onConfirm }) {
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
                     {entityLabel} <strong className="text-red-600 dark:text-red-400">{item.name}</strong> akan dihapus <span className="font-black text-red-600">PERMANEN</span> dari database.
                 </p>
-                <p className="text-xs text-red-500 dark:text-red-400 mb-6 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg">⚠️ Tindakan ini tidak dapat dibatalkan!</p>
+                <p className="text-xs text-red-500 dark:text-red-400 mb-6 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                    Tindakan ini tidak dapat dibatalkan!
+                </p>
                 <div className="flex justify-center gap-3">
                     <button onClick={onClose} className="px-6 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-2xl text-sm font-bold hover:bg-gray-200 transition-colors cursor-pointer">Batal</button>
                     <button onClick={onConfirm} className="px-6 py-2.5 bg-red-700 text-white rounded-2xl text-sm font-bold hover:bg-red-800 transition-colors shadow-lg shadow-red-700/30 cursor-pointer">Hapus Permanen</button>
@@ -81,6 +84,33 @@ function BulkRestoreModal({ count, onClose, onConfirm }) {
     );
 }
 
+// ─── Generic Bulk Force Delete Confirm ────────────────────────────────────────
+function BulkForceDeleteModal({ count, entityLabel = 'item', onClose, onConfirm }) {
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-[#1E272E] p-8 rounded-3xl shadow-2xl max-w-md w-full mx-4 border border-gray-100 dark:border-gray-800 text-center">
+                <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </div>
+                <h3 className="text-lg font-extrabold text-gray-800 dark:text-gray-100 mb-2">Hapus Permanen {count} {entityLabel} Terpilih?</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                    Semua {entityLabel.toLowerCase()} yang dicentang akan dihapus <span className="font-black text-red-600">PERMANEN</span> dari database (item yang masih terhubung dengan relasi aktif akan otomatis dilewati).
+                </p>
+                <p className="text-xs text-red-500 dark:text-red-400 mb-6 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                    Tindakan ini tidak dapat dibatalkan!
+                </p>
+                <div className="flex justify-center gap-3">
+                    <button onClick={onClose} className="px-6 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-2xl text-sm font-bold hover:bg-gray-200 transition-colors cursor-pointer">Batal</button>
+                    <button onClick={onConfirm} className="px-6 py-2.5 bg-red-700 text-white rounded-2xl text-sm font-bold hover:bg-red-800 transition-colors shadow-lg shadow-red-700/30 cursor-pointer">Hapus Permanen</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function Index({ currentTab, trashed, data }) {
     const { errors } = usePage().props;
 
@@ -115,6 +145,7 @@ export default function Index({ currentTab, trashed, data }) {
     const [confirmForceDeleteLoc, setConfirmForceDeleteLoc]   = useState(null);
     const [confirmBulkLocDelete, setConfirmBulkLocDelete]     = useState(false);
     const [confirmBulkLocRestore, setConfirmBulkLocRestore]   = useState(false);
+    const [confirmBulkLocForceDelete, setConfirmBulkLocForceDelete] = useState(false);
     const locationForm = useForm({ name: '', prefix_code: '', intended_for: '', description: '' });
 
     const openLocationModal = (item = null) => {
@@ -162,6 +193,13 @@ export default function Index({ currentTab, trashed, data }) {
             onError: () => setConfirmBulkLocRestore(false),
         });
     };
+    const executeBulkForceDeleteLoc = () => {
+        router.post(route('references.location-types.bulk-force-delete'), { ids: locationSelectedIds }, {
+            preserveScroll: true,
+            onSuccess: () => { setConfirmBulkLocForceDelete(false); setLocationSelectedIds([]); },
+            onError: () => setConfirmBulkLocForceDelete(false),
+        });
+    };
 
     // ─── STATE & FORM: SUPPLIER TYPE ──────────────────────────────────────────
     const [isSupplierModalOpen, setIsSupplierModalOpen]   = useState(false);
@@ -170,6 +208,7 @@ export default function Index({ currentTab, trashed, data }) {
     const [confirmForceDeleteSup, setConfirmForceDeleteSup]   = useState(null);
     const [confirmBulkSupDelete, setConfirmBulkSupDelete]     = useState(false);
     const [confirmBulkSupRestore, setConfirmBulkSupRestore]   = useState(false);
+    const [confirmBulkSupForceDelete, setConfirmBulkSupForceDelete] = useState(false);
     const supplierForm = useForm({ name: '', prefix_code: '', description: '' });
 
     const openSupplierModal = (item = null) => {
@@ -217,6 +256,13 @@ export default function Index({ currentTab, trashed, data }) {
             onError: () => setConfirmBulkSupRestore(false),
         });
     };
+    const executeBulkForceDeleteSup = () => {
+        router.post(route('references.supplier-types.bulk-force-delete'), { ids: supplierSelectedIds }, {
+            preserveScroll: true,
+            onSuccess: () => { setConfirmBulkSupForceDelete(false); setSupplierSelectedIds([]); },
+            onError: () => setConfirmBulkSupForceDelete(false),
+        });
+    };
 
     // ─── STATE & FORM: GOLONGAN OBAT ──────────────────────────────────────────
     const [isCategoryModalOpen, setIsCategoryModalOpen]   = useState(false);
@@ -225,6 +271,7 @@ export default function Index({ currentTab, trashed, data }) {
     const [confirmForceDeleteCat, setConfirmForceDeleteCat] = useState(null);
     const [confirmBulkCatDelete, setConfirmBulkCatDelete]   = useState(false);
     const [confirmBulkCatRestore, setConfirmBulkCatRestore] = useState(false);
+    const [confirmBulkCatForceDelete, setConfirmBulkCatForceDelete] = useState(false);
     const categoryForm = useForm({ name: '', description: '' });
 
     const openCategoryModal = (item = null) => {
@@ -272,6 +319,13 @@ export default function Index({ currentTab, trashed, data }) {
             onError: () => setConfirmBulkCatRestore(false),
         });
     };
+    const executeBulkForceDeleteCat = () => {
+        router.post(route('references.medicine-categories.bulk-force-delete'), { ids: categorySelectedIds }, {
+            preserveScroll: true,
+            onSuccess: () => { setConfirmBulkCatForceDelete(false); setCategorySelectedIds([]); },
+            onError: () => setConfirmBulkCatForceDelete(false),
+        });
+    };
 
     // ─── FUNGSI HAPUS (soft delete) untuk LOKASI & SUPPLIER (non-trash actions) ─
     // Karena sekarang destroy sudah menjadi soft delete, kita tidak lagi butuh modal hapus global
@@ -303,8 +357,8 @@ export default function Index({ currentTab, trashed, data }) {
             <Head title="Data Referensi" />
 
             <div className="mb-6">
-                <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Parameter &amp; Referensi</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Kelola master data pendukung yang akan digunakan pada seluruh dropdown fitur utama.</p>
+                <h3 className="text-xl font-extrabold text-gray-800 dark:text-gray-100">Parameter &amp; Referensi</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Kelola master data pendukung yang akan digunakan pada seluruh dropdown fitur utama.</p>
             </div>
 
             {/* Tab Navigasi Utama */}
@@ -334,18 +388,30 @@ export default function Index({ currentTab, trashed, data }) {
             {/* ─── SUB-HEADER: Trash Toggle + Bulk Actions (untuk semua tab) ─────────── */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
                 <div className="flex items-center gap-2 flex-wrap">
-                    {/* Bulk Restore (di tab trash) */}
+                    {/* Bulk Restore & Bulk Force Delete (di tab trash) */}
                     {currentSelectedIds.length > 0 && trashed && (
-                        <button
-                            onClick={() => {
-                                if (currentTab === 'tipe-lokasi') setConfirmBulkLocRestore(true);
-                                else if (currentTab === 'tipe-supplier') setConfirmBulkSupRestore(true);
-                                else setConfirmBulkCatRestore(true);
-                            }}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs cursor-pointer shadow-md shadow-blue-600/20">
-                            <RestoreIcon />
-                            <span>Pulihkan ({currentSelectedIds.length})</span>
-                        </button>
+                        <>
+                            <button
+                                onClick={() => {
+                                    if (currentTab === 'tipe-lokasi') setConfirmBulkLocRestore(true);
+                                    else if (currentTab === 'tipe-supplier') setConfirmBulkSupRestore(true);
+                                    else setConfirmBulkCatRestore(true);
+                                }}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs cursor-pointer shadow-md shadow-blue-600/20">
+                                <RestoreIcon />
+                                <span>Pulihkan ({currentSelectedIds.length})</span>
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (currentTab === 'tipe-lokasi') setConfirmBulkLocForceDelete(true);
+                                    else if (currentTab === 'tipe-supplier') setConfirmBulkSupForceDelete(true);
+                                    else setConfirmBulkCatForceDelete(true);
+                                }}
+                                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-xs cursor-pointer shadow-md shadow-red-600/20">
+                                <TrashIcon />
+                                <span>Hapus Permanen ({currentSelectedIds.length})</span>
+                            </button>
+                        </>
                     )}
                     {/* Bulk Delete (di tab aktif) */}
                     {currentSelectedIds.length > 0 && !trashed && (
@@ -371,7 +437,8 @@ export default function Index({ currentTab, trashed, data }) {
                         </button>
                         <button onClick={() => switchTrash(true)}
                             className={`px-4 py-2 text-xs font-bold transition-colors flex items-center gap-2 ${trashed ? 'bg-red-500 text-white' : 'bg-white dark:bg-[#1E272E] text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#151E24]'}`}>
-                            🗑️ Trash
+                            <TrashIcon />
+                                Trash
                             {currentTrashedCount > 0 && (
                                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${trashed ? 'bg-white/20 text-white' : 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400'}`}>
                                     {currentTrashedCount}
@@ -382,18 +449,24 @@ export default function Index({ currentTab, trashed, data }) {
 
                     {/* Add button (hanya di tab aktif) */}
                     {!trashed && currentTab === 'tipe-lokasi' && (
-                        <button onClick={() => openLocationModal()} className="px-4 py-2 bg-[#EAF5F0] text-[#246A55] dark:bg-[#253939] dark:text-[#67E2B4] rounded-lg font-bold text-xs hover:bg-[#48CFA4] hover:text-white transition-colors cursor-pointer">
-                            + Tambah Tipe Baru
+                        <button onClick={() => openLocationModal()}
+                            className="p-2.5 bg-[#48CFA4] text-white hover:bg-[#3bb890] rounded-md transition-colors shadow-sm dark:bg-[#253939] dark:text-[#67E2B4] dark:hover:bg-[#2d4747] dark:border dark:border-[#30413B] flex items-center justify-center cursor-pointer"
+                            title="Tambah Tipe Lokasi Baru">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"></path></svg>
                         </button>
                     )}
                     {!trashed && currentTab === 'tipe-supplier' && (
-                        <button onClick={() => openSupplierModal()} className="px-4 py-2 bg-[#EAF5F0] text-[#246A55] dark:bg-[#253939] dark:text-[#67E2B4] rounded-lg font-bold text-xs hover:bg-[#48CFA4] hover:text-white transition-colors cursor-pointer">
-                            + Tambah Tipe Pemasok
+                        <button onClick={() => openSupplierModal()}
+                            className="p-2.5 bg-[#48CFA4] text-white hover:bg-[#3bb890] rounded-md transition-colors shadow-sm dark:bg-[#253939] dark:text-[#67E2B4] dark:hover:bg-[#2d4747] dark:border dark:border-[#30413B] flex items-center justify-center cursor-pointer"
+                            title="Tambah Tipe Pemasok Baru">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"></path></svg>
                         </button>
                     )}
                     {!trashed && currentTab === 'golongan-obat' && (
-                        <button onClick={() => openCategoryModal()} className="px-4 py-2 bg-[#EAF5F0] text-[#246A55] dark:bg-[#253939] dark:text-[#67E2B4] rounded-lg font-bold text-xs hover:bg-[#48CFA4] hover:text-white transition-colors cursor-pointer">
-                            + Tambah Golongan
+                        <button onClick={() => openCategoryModal()}
+                            className="p-2.5 bg-[#48CFA4] text-white hover:bg-[#3bb890] rounded-md transition-colors shadow-sm dark:bg-[#253939] dark:text-[#67E2B4] dark:hover:bg-[#2d4747] dark:border dark:border-[#30413B] flex items-center justify-center cursor-pointer"
+                            title="Tambah Golongan Obat Baru">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"></path></svg>
                         </button>
                     )}
                 </div>
@@ -423,7 +496,7 @@ export default function Index({ currentTab, trashed, data }) {
                         <tbody>
                             {!data.locationTypes || data.locationTypes.length === 0 ? (
                                 <tr><td colSpan={trashed ? 7 : 6} className="px-6 py-16 text-center text-gray-400 dark:text-gray-500">
-                                    {trashed ? '🗑️ Keranjang sampah kosong.' : 'Belum ada data referensi.'}
+                                    {trashed ? 'Keranjang sampah kosong.' : 'Belum ada data referensi.'}
                                 </td></tr>
                             ) : (
                                 data.locationTypes.map((type) => (
@@ -501,7 +574,7 @@ export default function Index({ currentTab, trashed, data }) {
                         <tbody>
                             {!data.supplierTypes || data.supplierTypes.length === 0 ? (
                                 <tr><td colSpan={trashed ? 7 : 6} className="px-6 py-16 text-center text-gray-400 dark:text-gray-500">
-                                    {trashed ? '🗑️ Keranjang sampah kosong.' : 'Belum ada tipe pemasok terdaftar.'}
+                                    {trashed ? 'Keranjang sampah kosong.' : 'Belum ada tipe pemasok terdaftar.'}
                                 </td></tr>
                             ) : (
                                 data.supplierTypes.map((type) => (
@@ -579,7 +652,7 @@ export default function Index({ currentTab, trashed, data }) {
                             {!data.medicineCategories || data.medicineCategories.length === 0 ? (
                                 <tr>
                                     <td colSpan={trashed ? 6 : 5} className="px-6 py-16 text-center text-gray-400 dark:text-gray-500">
-                                        {trashed ? '🗑️ Keranjang sampah kosong.' : 'Belum ada golongan obat terdaftar.'}
+                                        {trashed ? 'Keranjang sampah kosong.' : 'Belum ada golongan obat terdaftar.'}
                                     </td>
                                 </tr>
                             ) : (
@@ -732,6 +805,11 @@ export default function Index({ currentTab, trashed, data }) {
             {confirmBulkLocRestore && <BulkRestoreModal count={locationSelectedIds.length} onClose={() => setConfirmBulkLocRestore(false)} onConfirm={executeBulkRestoreLoc} />}
             {confirmBulkSupRestore && <BulkRestoreModal count={supplierSelectedIds.length} onClose={() => setConfirmBulkSupRestore(false)} onConfirm={executeBulkRestoreSup} />}
             {confirmBulkCatRestore && <BulkRestoreModal count={categorySelectedIds.length} onClose={() => setConfirmBulkCatRestore(false)} onConfirm={executeBulkRestoreCat} />}
+
+            {/* ─── BULK FORCE DELETE MODALS ─────────────────────────────────────────── */}
+            {confirmBulkLocForceDelete && <BulkForceDeleteModal count={locationSelectedIds.length} entityLabel="Tipe Lokasi" onClose={() => setConfirmBulkLocForceDelete(false)} onConfirm={executeBulkForceDeleteLoc} />}
+            {confirmBulkSupForceDelete && <BulkForceDeleteModal count={supplierSelectedIds.length} entityLabel="Tipe Supplier" onClose={() => setConfirmBulkSupForceDelete(false)} onConfirm={executeBulkForceDeleteSup} />}
+            {confirmBulkCatForceDelete && <BulkForceDeleteModal count={categorySelectedIds.length} entityLabel="Golongan Obat" onClose={() => setConfirmBulkCatForceDelete(false)} onConfirm={executeBulkForceDeleteCat} />}
 
         </AuthenticatedLayout>
     );

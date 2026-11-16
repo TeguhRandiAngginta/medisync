@@ -183,10 +183,18 @@ class SupplierController extends Controller
             $purchaseCount = \App\Models\Purchase::withTrashed()->where('supplier_id', $supplier->id)->count();
             $medicineCount = \App\Models\Medicine::withTrashed()->where('supplier_id', $supplier->id)->count();
 
-            if ($purchaseCount > 0 || $medicineCount > 0) {
+            $reasons = [];
+            if ($purchaseCount > 0) {
+                $reasons[] = "Faktur Pembelian ({$purchaseCount} transaksi pada purchases)";
+            }
+            if ($medicineCount > 0) {
+                $reasons[] = "Katalog Obat ({$medicineCount} produk pada medicines)";
+            }
+
+            if (!empty($reasons)) {
                 DB::rollBack();
                 return back()->withErrors([
-                    'message' => "Tidak dapat dihapus permanen: Pemasok '{$supplier->name}' masih terhubung dengan {$purchaseCount} Faktur Pembelian dan {$medicineCount} data obat."
+                    'message' => "Aksi Ditolak: Pemasok '{$supplier->name}' ({$supplier->code}) tidak dapat dihapus secara permanen karena masih terhubung dengan: " . implode(' dan ', $reasons) . " (termasuk data di dalam Trash)."
                 ]);
             }
 
@@ -249,6 +257,59 @@ class SupplierController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['message' => 'Gagal pulihkan massal: ' . $e->getMessage()]);
+        }
+    }
+
+    public function bulkForceDelete(Request $request)
+    {
+        $validated = $request->validate([
+            'ids'   => 'required|array',
+            'ids.*' => 'integer',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $suppliers = Supplier::onlyTrashed()->whereIn('id', $validated['ids'])->get();
+            $deletedCount = 0;
+            $failedNames = [];
+
+            foreach ($suppliers as $supplier) {
+                $purchaseCount = \App\Models\Purchase::withTrashed()->where('supplier_id', $supplier->id)->count();
+                $medicineCount = \App\Models\Medicine::withTrashed()->where('supplier_id', $supplier->id)->count();
+
+                $reasons = [];
+                if ($purchaseCount > 0) $reasons[] = "Pembelian ({$purchaseCount})";
+                if ($medicineCount > 0) $reasons[] = "Obat ({$medicineCount})";
+
+                if (!empty($reasons)) {
+                    $failedNames[] = "{$supplier->name} [" . implode(', ', $reasons) . "]";
+                    continue;
+                }
+
+                $name = $supplier->name;
+                $supplier->forceDelete();
+                AuditLog::record('supplier', 'FORCE DELETE', "Menghapus PERMANEN data pemasok: {$name} (bulk)");
+                $deletedCount++;
+            }
+
+            if (count($failedNames) > 0 && $deletedCount === 0) {
+                DB::rollBack();
+                return back()->withErrors([
+                    'message' => 'Seluruh pemasok terpilih tidak dapat dihapus permanen karena masih terhubung dengan Faktur Pembelian atau katalog obat: ' . implode('; ', $failedNames) . ' (termasuk data di dalam Trash).'
+                ]);
+            }
+
+            DB::commit();
+
+            $message = "{$deletedCount} pemasok berhasil dihapus secara permanen.";
+            if (count($failedNames) > 0) {
+                $message .= ' Namun ' . count($failedNames) . ' pemasok dilewati karena masih terikat data pembelian atau obat: ' . implode('; ', $failedNames) . '.';
+            }
+
+            return redirect()->route('suppliers.index', ['trashed' => true])->with('success', $message);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['message' => 'Gagal hapus permanen massal: ' . $e->getMessage()]);
         }
     }
 

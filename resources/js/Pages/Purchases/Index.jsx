@@ -2,8 +2,14 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, usePage, router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 
-export default function Index({ purchases }) {
-    const { flash, errors } = usePage().props;
+const TrashIcon = () => (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+    </svg>
+);
+
+export default function Index({ purchases, trashed = false, trashedCount = 0 }) {
+    const { errors } = usePage().props;
     const [confirmingDeletion, setConfirmingDeletion] = useState(false);
     const [selectedPurchase, setSelectedPurchase] = useState(null);
     const [printModalOpen, setPrintModalOpen] = useState(false);
@@ -25,6 +31,18 @@ export default function Index({ purchases }) {
             setAuthErrorModal(true);
         }
     }, [errors]);
+
+    const switchTab = (toTrash) => {
+        setSelectedIds([]);
+        router.get(route('purchases.index'), toTrash ? { trashed: true } : {}, { preserveScroll: true, replace: true });
+    };
+
+    const formatDate = (dateStr) => {
+        if (!dateStr) return '-';
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return dateStr;
+        return d.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
 
     const formatRupiah = (number) => {
         return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number || 0);
@@ -104,48 +122,56 @@ export default function Index({ purchases }) {
                     <p className="text-xs text-gray-400 mt-0.5">Kelola data pembelian dan pantau masa kedaluwarsa obat.</p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     {selectedIds.length > 0 && (
                         <button 
                             onClick={() => setConfirmingBulkDeletion(true)}
-                            className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all duration-200 shadow-md shadow-red-600/20 font-bold text-xs tracking-wide cursor-pointer animate-in fade-in"
+                            className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all font-bold text-xs tracking-wide cursor-pointer shadow-md shadow-red-600/20"
                         >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                            </svg>
+                            <TrashIcon />
                             <span>Hapus ({selectedIds.length})</span>
                         </button>
                     )}
 
-                    <Link 
+                    {/* Tab Toggle */}
+                    <div className="flex rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm">
+                        <button onClick={() => switchTab(false)}
+                            className={`px-4 py-2.5 text-xs font-bold transition-colors ${!trashed ? 'bg-[#48CFA4] text-white dark:bg-[#253939] dark:text-[#67E2B4]' : 'bg-white dark:bg-[#1E272E] text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#151E24]'}`}>
+                            Data Aktif
+                        </button>
+                        <button onClick={() => switchTab(true)}
+                            className={`px-4 py-2.5 text-xs font-bold transition-colors flex items-center gap-2 ${trashed ? 'bg-red-500 text-white' : 'bg-white dark:bg-[#1E272E] text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#151E24]'}`}>
+                            <TrashIcon />
+                            Trash
+                            {trashedCount > 0 && (
+                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${trashed ? 'bg-white/20 text-white' : 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400'}`}>
+                                    {trashedCount}
+                                </span>
+                            )}
+                        </button>
+                    </div>
+
+                    <Link
                         href={route('batches.index')}
                         title="Cek Masa Kedaluwarsa (FEFO)"
-                        className="p-2.5 bg-gray-50 dark:bg-[#151E24] text-gray-600 dark:text-gray-300 hover:text-[#48CFA4] dark:hover:text-[#67E2B4] rounded-xl transition-all duration-200 border border-gray-200 dark:border-gray-700/60 flex items-center justify-center cursor-pointer shadow-sm"
+                        className="p-2.5 bg-white dark:bg-[#1E272E] text-gray-600 dark:text-gray-300 hover:text-[#48CFA4] dark:hover:text-[#67E2B4] rounded-md transition-colors border border-gray-200 dark:border-gray-700 flex items-center justify-center cursor-pointer shadow-sm"
                     >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </Link>
 
-                    <Link 
-                        href={route('purchases.trash')}
-                        title="Lihat Tong Sampah"
-                        className="p-2.5 bg-gray-50 dark:bg-[#151E24] text-gray-600 dark:text-gray-300 hover:text-red-500 dark:hover:text-red-400 rounded-xl transition-all duration-200 border border-gray-200 dark:border-gray-700/60 flex items-center justify-center cursor-pointer shadow-sm"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                        </svg>
-                    </Link>
-
-                    <Link 
-                        href={route('purchases.create')} 
-                        title="Catat Faktur Baru"
-                        className="p-2.5 bg-[#48CFA4] text-white hover:bg-[#3bb890] rounded-md transition-colors shadow-sm dark:bg-[#253939] dark:text-[#67E2B4] dark:hover:bg-[#2d4747] dark:border dark:border-[#30413B] flex items-center justify-center cursor-pointer"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"></path>
-                        </svg>
-                    </Link>
+                    {!trashed && (
+                        <Link 
+                            href={route('purchases.create')} 
+                            title="Catat Faktur Baru"
+                            className="p-2.5 bg-[#48CFA4] text-white hover:bg-[#3bb890] rounded-md transition-colors shadow-sm dark:bg-[#253939] dark:text-[#67E2B4] dark:hover:bg-[#2d4747] dark:border dark:border-[#30413B] flex items-center justify-center cursor-pointer"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"></path>
+                            </svg>
+                        </Link>
+                    )}
                 </div>
             </div>
 
@@ -189,7 +215,7 @@ export default function Index({ purchases }) {
                                         {purchase.invoice_number}
                                         <span className="block text-[10px] text-gray-400 font-normal">Internal: {purchase.internal_receipt_number}</span>
                                     </td>
-                                    <td className="px-6 py-5 text-gray-700 dark:text-gray-200">{purchase.purchase_date}</td>
+                                    <td className="px-6 py-5 text-gray-700 dark:text-gray-200">{formatDate(purchase.purchase_date)}</td>
                                     <td className="px-6 py-5 font-bold text-gray-800 dark:text-gray-200">{purchase.supplier?.name || '-'}</td>
                                     <td className="px-6 py-5 text-right font-mono font-bold text-gray-700 dark:text-gray-200">
                                         {formatRupiah(purchase.total_amount)}
