@@ -91,7 +91,7 @@ class PurchaseController extends Controller
                 'purchase_date' => $validated['purchase_date'],
                 'total_amount' => $totalAmount,
                 'status' => 'completed',
-                'notes' => $validated['notes'],
+                'notes' => $validated['notes'] ?? null,
             ]);
 
             foreach ($request->items as $item) {

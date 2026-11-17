@@ -23,6 +23,7 @@ export default function ReportStockLedger({ stockMutations = [] }) {
                         <th className="px-6 py-3.5 text-center">Jumlah</th>
                         <th className="px-6 py-3.5">No. Referensi / Struk</th>
                         <th className="px-6 py-3.5">Keterangan Sumber</th>
+                        <th className="px-6 py-3.5 text-center">Saldo Stok</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800/60 text-gray-800 dark:text-gray-200">
@@ -59,11 +60,15 @@ export default function ReportStockLedger({ stockMutations = [] }) {
                                 <td className="px-6 py-4 text-xs text-gray-500 dark:text-gray-400">
                                     {item.description}
                                 </td>
+                                <td className="px-6 py-4 text-center font-mono font-bold text-sm text-gray-900 dark:text-white">
+                                    {item.balance}
+                                    <span className="block text-[10px] font-normal text-gray-400">sebelumnya {item.balance_before}</span>
+                                </td>
                             </tr>
                         ))
                     ) : (
                         <tr>
-                            <td colSpan="6" className="px-6 py-12 text-center text-gray-400 text-sm font-bold">
+                            <td colSpan="7" className="px-6 py-12 text-center text-gray-400 text-sm font-bold">
                                 Belum ada riwayat mutasi stok pada periode ini.
                             </td>
                         </tr>
