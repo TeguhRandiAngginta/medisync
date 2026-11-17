@@ -1,5 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, usePage, router } from '@inertiajs/react';
+import Pagination from '@/Components/Pagination';
 import { useEffect, useState } from 'react';
 
 const TrashIcon = () => (
@@ -8,7 +9,8 @@ const TrashIcon = () => (
     </svg>
 );
 
-export default function Index({ purchases, trashed = false, trashedCount = 0 }) {
+export default function Index({ purchases: purchasesPage, trashed = false, trashedCount = 0 }) {
+    const purchases = purchasesPage?.data ?? [];
     const { errors } = usePage().props;
     const [confirmingDeletion, setConfirmingDeletion] = useState(false);
     const [selectedPurchase, setSelectedPurchase] = useState(null);
@@ -21,6 +23,9 @@ export default function Index({ purchases, trashed = false, trashedCount = 0 }) 
 
     // STATE: Untuk pengelolaan pilihan checkbox (bulk delete)
     const [selectedIds, setSelectedIds] = useState([]);
+
+    // Pilihan hanya berlaku untuk halaman yang tampil: kosongkan saat pindah halaman/tab.
+    useEffect(() => { setSelectedIds([]); }, [purchasesPage?.current_page, trashed]);
     const [confirmingBulkDeletion, setConfirmingBulkDeletion] = useState(false);
 
     // STATE: Modal Error Otorisasi (403)
@@ -256,6 +261,8 @@ export default function Index({ purchases, trashed = false, trashedCount = 0 }) 
                     </tbody>
                 </table>
             </div>
+
+            <Pagination links={purchasesPage?.links} meta={purchasesPage} />
 
             {/* MODAL PERINGATAN AKSES DITOLAK (403) */}
             {authErrorModal && (

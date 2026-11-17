@@ -1,8 +1,10 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
+import Pagination from '@/Components/Pagination';
 import { useState } from 'react';
 
-export default function Trash({ purchases }) {
+export default function Trash({ purchases: purchasesPage }) {
+    const purchases = purchasesPage?.data ?? [];
     const [confirmingRestore, setConfirmingRestore] = useState(false);
     const [confirmingForceDelete, setConfirmingForceDelete] = useState(false);
     const [selectedPurchase, setSelectedPurchase] = useState(null);
@@ -123,6 +125,8 @@ export default function Trash({ purchases }) {
                     </tbody>
                 </table>
             </div>
+
+            <Pagination links={purchasesPage?.links} meta={purchasesPage} />
 
             {/* MODAL KONFIRMASI PULIHKAN */}
             {confirmingRestore && (

@@ -143,4 +143,59 @@ class PaginationTest extends TestCase
         $this->assertStringContainsString('FAKTUR-1', $html);   // baris tertua, di luar halaman 1
         $this->assertStringContainsString('INV-030', $html);
     }
+
+    private function supplier(): Supplier
+    {
+        $type = SupplierType::firstOrCreate(['name' => 'PBF'], ['prefix_code' => 'PBF']);
+
+        return Supplier::firstOrCreate(['code' => 'S-PAG'], ['supplier_type_id' => $type->id, 'name' => 'PBF Paginasi', 'is_active' => true]);
+    }
+
+    public function test_prescriptions_are_paginated_with_separate_trash_listing(): void
+    {
+        for ($i = 1; $i <= 30; $i++) {
+            \App\Models\Prescription::create([
+                'prescription_number' => sprintf('RSP-%03d', $i), 'patient_name' => 'P', 'doctor_name' => 'D',
+                'prescription_date' => now()->toDateString(), 'status' => 'DRAFT', 'user_id' => $this->admin->id,
+            ]);
+        }
+        \App\Models\Prescription::where('prescription_number', 'RSP-001')->first()->delete();
+
+        $page1 = $this->props('/prescriptions')['prescriptions'];
+        $page2 = $this->props('/prescriptions?page=2')['prescriptions'];
+        $trashed = $this->props('/prescriptions?trashed=1')['prescriptions'];
+
+        $this->assertSame(29, $page1['total']);
+        $this->assertCount(25, $page1['data']);
+        $this->assertCount(4, $page2['data']);
+        $this->assertSame(1, $trashed['total']);
+    }
+
+    public function test_purchases_and_purchase_trash_are_paginated(): void
+    {
+        $supplier = $this->supplier();
+        for ($i = 1; $i <= 30; $i++) {
+            Purchase::create([
+                'internal_receipt_number' => "BPB-{$i}", 'invoice_number' => "FAKTUR-{$i}", 'supplier_id' => $supplier->id,
+                'user_id' => $this->admin->id, 'purchase_date' => now()->toDateString(), 'total_amount' => 100, 'status' => 'completed',
+            ]);
+        }
+        foreach (range(1, 27) as $i) {
+            Purchase::where('invoice_number', "FAKTUR-{$i}")->first()->delete(); // 27 ke trash, 3 aktif
+        }
+
+        $active = $this->props('/purchases')['purchases'];
+        $this->assertSame(3, $active['total']);
+        $this->assertCount(3, $active['data']);
+
+        $trashedPage1 = $this->props('/purchases?trashed=1')['purchases'];
+        $this->assertSame(27, $trashedPage1['total']);
+        $this->assertCount(25, $trashedPage1['data']);
+
+        $trashRoute1 = $this->props('/purchases/trash')['purchases'];
+        $trashRoute2 = $this->props('/purchases/trash?page=2')['purchases'];
+        $this->assertSame(27, $trashRoute1['total']);
+        $this->assertCount(25, $trashRoute1['data']);
+        $this->assertCount(2, $trashRoute2['data']);
+    }
 }

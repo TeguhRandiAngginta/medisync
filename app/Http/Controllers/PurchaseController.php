@@ -35,7 +35,9 @@ class PurchaseController extends Controller
         }])
         ->when($trashed, fn($q) => $q->onlyTrashed(), fn($q) => $q->withoutTrashed())
         ->latest($trashed ? 'deleted_at' : 'created_at')
-        ->get();
+        ->orderByDesc('id')
+        ->paginate(25)
+        ->withQueryString();
 
         $trashedCount = Purchase::onlyTrashed()->count();
 
@@ -432,7 +434,9 @@ class PurchaseController extends Controller
         $trashedPurchases = Purchase::onlyTrashed()
             ->with(['supplier', 'user'])
             ->latest()
-            ->get();
+            ->orderByDesc('id')
+            ->paginate(25)
+            ->withQueryString();
 
         return Inertia::render('Purchases/Trash', [
             'purchases' => $trashedPurchases

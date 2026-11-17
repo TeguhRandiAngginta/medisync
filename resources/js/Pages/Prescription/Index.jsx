@@ -1,6 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import Pagination from '@/Components/Pagination';
+import { useState, useEffect } from 'react';
 
 const EditIcon = () => (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -26,8 +27,12 @@ const WarningIcon = () => (
     </svg>
 );
 
-export default function Index({ prescriptions = [], trashed = false, trashedCount = 0 }) {
+export default function Index({ prescriptions: prescriptionsPage = { data: [] }, trashed = false, trashedCount = 0 }) {
+    const prescriptions = prescriptionsPage?.data ?? [];
     const [selectedIds, setSelectedIds] = useState([]);
+
+    // Pilihan hanya berlaku untuk halaman yang tampil: kosongkan saat pindah halaman/tab.
+    useEffect(() => { setSelectedIds([]); }, [prescriptionsPage?.current_page, trashed]);
     const [selectedPrint, setSelectedPrint] = useState(null);
     const [selectedEtiket, setSelectedEtiket] = useState(null);
     const [confirmDelete, setConfirmDelete] = useState(null);
@@ -466,6 +471,8 @@ export default function Index({ prescriptions = [], trashed = false, trashedCoun
                     </tbody>
                 </table>
             </div>
+
+            <Pagination links={prescriptionsPage?.links} meta={prescriptionsPage} />
 
             {/* MODAL: Konfirmasi Soft Delete */}
             {confirmDelete && (

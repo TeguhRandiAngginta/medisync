@@ -54,9 +54,10 @@ class PrescriptionController extends Controller
 
         $query = Prescription::with(['user', 'items.medicine'])
             ->when($trashed, fn($q) => $q->onlyTrashed(), fn($q) => $q->withoutTrashed())
-            ->orderBy($trashed ? 'deleted_at' : 'created_at', 'desc');
+            ->orderBy($trashed ? 'deleted_at' : 'created_at', 'desc')
+            ->orderByDesc('id');
 
-        $prescriptions = $query->get();
+        $prescriptions = $query->paginate(25)->withQueryString();
         $trashedCount = Prescription::onlyTrashed()->count();
 
         return Inertia::render('Prescription/Index', [
