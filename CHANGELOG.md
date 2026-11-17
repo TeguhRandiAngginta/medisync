@@ -23,7 +23,9 @@ Perubahan di bawah ini dicatat pada branch `ditz`.
 - Item resep lama hasil edit tidak hidup lagi saat resep dipulihkan dari trash: `PrescriptionController::update` memakai `forceDelete` untuk item yang diganti.
 - Kunci API Gemini tidak lagi bocor lewat pesan error: `GoogleAIService` menyamarkan key (`[REDACTED]`) di pesan exception dan log. Model dari `GEMINI_MODEL` kini dicoba lebih dulu.
 - Struk POS tidak lagi `INV-SUCCESS`: `HandleInertiaRequests` membagikan `flash.invoice_number` ke UI.
-- Test regresi baru: `tests/Feature/BugfixRegressionTest.php` (10 test; semuanya gagal pada kode lama dan lulus pada kode baru). Seluruh suite: 55 test lulus.
+- Resep: hapus, pulihkan, dan hapus permanen (termasuk bulk) kini hanya untuk superadmin dan apoteker (sebelumnya kasir bisa). Resep berstatus DISPENSED tidak bisa dipindahkan ke trash. Hapus permanen juga menghapus file lampirannya dari disk.
+- `SupplierController::store/update` memvalidasi `code` unik termasuk data di trash (sesuai unique index DB), sehingga tidak lagi berakhir 500. `quickStore` supplier dan obat serta `RackController::store` mengubah kode ke huruf besar sebelum validasi.
+- Test regresi baru: `tests/Feature/BugfixRegressionTest.php` (14 test; semuanya gagal pada kode lama dan lulus pada kode baru). Seluruh suite: 59 test lulus.
 
 **Catatan data lama:** item resep versi lama yang sudah terlanjur berstatus soft-deleted di database bisa tetap muncul saat resep dipulihkan; perbaikan hanya berlaku untuk edit berikutnya. Juga, perbaikan stok membengkak hanya berlaku untuk transaksi yang diproses setelah ini. Transaksi yang sudah pernah dihapus lalu dipulihkan pada kode lama bisa masih punya baris ganda di `sale_detail_batches`, sehingga menghapusnya lagi tetap mengembalikan stok dua kali. Cek dengan: `SELECT sale_detail_id FROM sale_detail_batches b JOIN sale_details d ON d.id = b.sale_detail_id GROUP BY sale_detail_id, d.quantity HAVING SUM(b.quantity) > d.quantity;`. Migrasi pembersih belum dibuat.
 
@@ -44,8 +46,7 @@ Cakupan: controller dan service domain sudah dibaca (`Pos`, `CashRegister`, `Pur
 **Sedang**
 - **[V]** `GoogleAIService`: daftar model fallback di-hardcode dan dicoba berurutan, tiap kegagalan menghabiskan timeout 25 dtk (hingga ±125 dtk).
 - **[?]** Nama model `gemini-3.8-flash` dan `gemini-1.5-*` perlu dicocokkan dengan daftar model Gemini yang berlaku.
-- **[V]** Lampiran resep disimpan di disk `public` dan dilayani tanpa login. Nama file acak (tidak bisa ditebak), tetapi URL yang bocor tidak bisa dicabut, dan file tidak dihapus saat resep dihapus permanen. Data medis pasien.
-- **[V]** Rute resep (hapus, restore, hapus permanen, ubah) bisa diakses kasir karena hanya dibatasi `role:superadmin,apoteker,kasir` tanpa pengecekan di controller. `destroy` juga boleh menghapus resep berstatus DISPENSED.
+- **[V]** Lampiran resep disimpan di disk `public` dan dilayani tanpa login. Nama file acak (tidak bisa ditebak), tetapi URL yang bocor tidak bisa dicabut. Data medis pasien.
 - **[V]** `StockAdjustmentController`: membatalkan atau memulihkan opname mengurangi atau menambah `difference` pada stok saat ini dengan `max(0, ...)`. Kalau stok sudah berubah setelah opname, hasilnya salah dan selisih hilang diam-diam.
 - **[V]** `type` opname (`DAMAGE`, `EXPIRED`, `LOST`) tidak divalidasi terhadap tanda selisih, sehingga "rusak" bisa menambah stok. Selisih 0 tetap dicatat.
 - **[V]** Nomor resep `RSP-Ymd-mt_rand(1,999)` di `PrescriptionController::store` rawan bentrok. Kolom `prescription_number` unik, jadi bentrok menghasilkan pesan gagal simpan.
@@ -53,7 +54,6 @@ Cakupan: controller dan service domain sudah dibaca (`Pos`, `CashRegister`, `Pur
 - **[?]** `openShift` tidak punya kunci atau unique constraint, klik ganda cepat bisa membuat dua shift terbuka.
 - **[V]** `PurchaseController::store` mewajibkan `expired_date >= 6 bulan ke depan`, sehingga barang dengan sisa umur lebih pendek tidak bisa dicatat.
 - **[V]** Lampiran resep dibatasi 2 MB (`max:2048`), sedangkan `analyzeImage` menerima 5 MB. Foto ponsel mudah melewati batas.
-- **[V]** `suppliers.code` unik di level DB, tetapi validasi `SupplierController::store/update` hanya memeriksa `whereNull('deleted_at')`. Kode yang sama dengan pemasok di trash lolos validasi lalu gagal dengan error DB (500). `quickStore` sebaliknya memakai `unique` termasuk trash.
 - **[V]** `ReportController::generateStockLedger` (kartu stok) hanya memuat pembelian (IN) dan penjualan (OUT). Penyesuaian opname dan pembatalan/pemulihan transaksi tidak tercatat dan tidak ada saldo awal, jadi kartu stok tidak cocok dengan stok.
 - **[V]** `RackController::update` memakai `'is_active' => $request->is_active ?? false`; bila field tidak terkirim, rak dinonaktifkan diam-diam (berbeda dari `SupplierController`).
 - **[V]** `ProductController::forceDelete` dan `bulkForceDelete` tidak memeriksa `PrescriptionItem`. Hasilnya bergantung pada FK: error 500 atau item resep ikut hilang.
@@ -66,7 +66,6 @@ Cakupan: controller dan service domain sudah dibaca (`Pos`, `CashRegister`, `Pur
 - **[?]** Parsing `payment_method` split di `CashRegisterController::closeShift` rapuh untuk nominal desimal.
 - **[V]** `Medicine.stock` (`syncMedicineStock`) menjumlahkan semua batch termasuk kedaluwarsa, sedangkan POS mengecualikannya, sehingga angka stok berbeda antar halaman.
 - **[V]** `PrescriptionController::index` dan `StockAdjustmentController::create` memuat semua data tanpa paginasi.
-- **[V]** `strtoupper` dilakukan setelah validasi unik pada `ProductController::quickStore` dan `RackController::store`, sehingga kode yang hanya beda huruf besar/kecil lolos validasi dan gagal di unique index DB (500).
 - **[V]** `ProductController::bulkDestroy/bulkRestore` tidak memvalidasi `ids`, dan pesan `bulkRestore` memakai `count($ids)` alih-alih jumlah yang benar-benar dipulihkan.
 - **[V]** Ambang stok rendah tidak konsisten: laporan memakai `stock <= 10` (hardcode), dashboard memakai `stock <= min_stock`. `lowStockCount` dashboard juga tidak memfilter `is_active`, berbeda dari daftarnya.
 - **[?]** Distribusi pembayaran di dashboard mengelompokkan per string `payment_method`; pembayaran split ("Cash: 50000 + QRIS: 25000") menjadi bucket tersendiri per kombinasi nominal.

@@ -37,6 +37,10 @@ class RackController extends Controller
 
     public function store(Request $request)
     {
+        if ($request->filled('code')) {
+            $request->merge(['code' => strtoupper($request->code)]);
+        }
+
         $validated = $request->validate([
             'location_type_id' => 'required|exists:location_types,id',
             'code'             => 'required|string|max:50|unique:racks',

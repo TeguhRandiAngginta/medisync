@@ -43,8 +43,8 @@ class SupplierController extends Controller
                 'required',
                 'string',
                 'max:50',
-                // Case-insensitive unique: hanya cek yang belum di-trash (deleted_at IS NULL)
-                \Illuminate\Validation\Rule::unique('suppliers', 'code')->whereNull('deleted_at'),
+                // Kolom `code` unik di level DB (termasuk yang di trash), jadi validasi harus sama.
+                \Illuminate\Validation\Rule::unique('suppliers', 'code'),
             ],
             'name'             => [
                 'required',
@@ -90,8 +90,7 @@ class SupplierController extends Controller
                 'string',
                 'max:50',
                 \Illuminate\Validation\Rule::unique('suppliers', 'code')
-                    ->ignore($supplier->id)
-                    ->whereNull('deleted_at'),
+                    ->ignore($supplier->id),
             ],
             'name'             => [
                 'required',
@@ -315,6 +314,10 @@ class SupplierController extends Controller
 
     public function quickStore(Request $request)
     {
+        if ($request->filled('code')) {
+            $request->merge(['code' => strtoupper($request->code)]);
+        }
+
         $validated = $request->validate([
             'supplier_type_id' => 'required|exists:supplier_types,id',
             'code'             => 'required|string|max:50|unique:suppliers,code',
