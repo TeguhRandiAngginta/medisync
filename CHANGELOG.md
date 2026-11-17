@@ -25,7 +25,8 @@ Perubahan di bawah ini dicatat pada branch `ditz`.
 - Struk POS tidak lagi `INV-SUCCESS`: `HandleInertiaRequests` membagikan `flash.invoice_number` ke UI.
 - Resep: hapus, pulihkan, dan hapus permanen (termasuk bulk) kini hanya untuk superadmin dan apoteker (sebelumnya kasir bisa). Resep berstatus DISPENSED tidak bisa dipindahkan ke trash. Hapus permanen juga menghapus file lampirannya dari disk.
 - `SupplierController::store/update` memvalidasi `code` unik termasuk data di trash (sesuai unique index DB), sehingga tidak lagi berakhir 500. `quickStore` supplier dan obat serta `RackController::store` mengubah kode ke huruf besar sebelum validasi.
-- Test regresi baru: `tests/Feature/BugfixRegressionTest.php` (14 test; semuanya gagal pada kode lama dan lulus pada kode baru). Seluruh suite: 59 test lulus.
+- OCR resep (`PrescriptionController::analyzeImage`) tidak lagi menebak obat: nama dan dosis dipisah, dosis di resep harus cocok dengan stok, nama yang cocok dengan beberapa obat (mis. Paracetamol 500mg dan 650mg) tidak dipilih otomatis melainkan dimasukkan ke catatan peringatan beserta pilihannya, nama persis diprioritaskan, dan karakter `%`/`_` dari OCR di-escape agar tidak menjadi wildcard. Validasi upload yang gagal kini mengembalikan 422, bukan 500.
+- Test regresi baru: `tests/Feature/BugfixRegressionTest.php` (14 test) dan `tests/Feature/PrescriptionOcrMatchingTest.php` (7 test, butuh PostgreSQL karena memakai `ilike`; dilewati di SQLite). Pada kode lama, test OCR yang menguji perilaku baru gagal (5 dari 7). Seluruh suite: 66 test lulus di PostgreSQL, dan di SQLite 59 lulus + 7 dilewati.
 
 **Catatan data lama:** item resep versi lama yang sudah terlanjur berstatus soft-deleted di database bisa tetap muncul saat resep dipulihkan; perbaikan hanya berlaku untuk edit berikutnya. Juga, perbaikan stok membengkak hanya berlaku untuk transaksi yang diproses setelah ini. Transaksi yang sudah pernah dihapus lalu dipulihkan pada kode lama bisa masih punya baris ganda di `sale_detail_batches`, sehingga menghapusnya lagi tetap mengembalikan stok dua kali. Cek dengan: `SELECT sale_detail_id FROM sale_detail_batches b JOIN sale_details d ON d.id = b.sale_detail_id GROUP BY sale_detail_id, d.quantity HAVING SUM(b.quantity) > d.quantity;`. Migrasi pembersih belum dibuat.
 
@@ -41,7 +42,6 @@ Cakupan: controller dan service domain sudah dibaca (`Pos`, `CashRegister`, `Pur
 `ReferenceController` hanya dibaca ±200 dari 584 baris (struktur tiap blok sama, guard hapus permanen dicek lewat grep). **Belum dibaca:** seluruh frontend `resources/js`, controller auth bawaan Breeze (`routes/auth.php` hanya dilihat, kecuali `RegisteredUser`), `ReportExport`, dan view Blade. `HandleInertiaRequests` sudah dibaca: key flash `success` dan `error` dibagikan ke UI. Semua temuan di sini murni dari membaca kode, belum ada yang direproduksi lewat uji jalan.
 
 **Tinggi**
-- **[V]** Pencocokan obat di `analyzeImage` memakai `ilike '%nama%'->first()` tanpa urutan. Obat dengan dosis berbeda bisa tertukar dan dimasukkan ke resep.
 
 **Sedang**
 - **[V]** `GoogleAIService`: daftar model fallback di-hardcode dan dicoba berurutan, tiap kegagalan menghabiskan timeout 25 dtk (hingga ±125 dtk).

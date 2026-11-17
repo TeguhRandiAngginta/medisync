@@ -175,32 +175,27 @@ class PrescriptionController extends Controller
             $notFoundMedicines = [];
 
             foreach ($extractedItems as $item) {
-                $queryName = $item['medicine_name'] ?? ($item['name'] ?? '');
-                if (empty($queryName)) continue;
+                $queryName = trim((string) ($item['medicine_name'] ?? ($item['name'] ?? '')));
+                if ($queryName === '') continue;
 
-                $medicine = Medicine::where('is_active', true)
-                    ->where(function($q) use ($queryName) {
-                        $q->where('name', 'ilike', "%{$queryName}%")
-                            ->orWhere('sku', 'ilike', "%{$queryName}%");
-                    })
-                    ->first();
+                $qty  = max(1, (int) ($item['quantity'] ?? 1));
+                $signa = $item['signa'] ?? '3 x 1';
+
+                ['match' => $medicine, 'candidates' => $candidates, 'reason' => $reason] = $this->findMedicineMatch($queryName);
 
                 if ($medicine) {
                     $matchedItems[] = [
                         'medicine_id' => $medicine->id,
                         'name'        => $medicine->name,
-                        'quantity'    => (int) ($item['quantity'] ?? 1),
-                        'signa'       => $item['signa'] ?? '3 x 1',
+                        'quantity'    => $qty,
+                        'signa'       => $signa,
                     ];
                 } else {
-                    $searchKeyword = substr(trim($queryName), 0, 3);
-                    $alternative = Medicine::where('is_active', true)
-                        ->where('name', 'ilike', "%{$searchKeyword}%")
-                        ->first();
-                        
-                    $altText = $alternative ? " (Saran Alternatif di Stok: {$alternative->name})" : " (Tidak ada alternatif yang mirip di inventaris)";
-                    
-                    $notFoundMedicines[] = "- {$queryName} (Diminta Qty: " . ($item['quantity'] ?? 1) . ", Signa: " . ($item['signa'] ?? '-') . "){$altText}";
+                    $altText = $candidates->isNotEmpty()
+                        ? " ({$reason}. Pilihan di stok: " . $candidates->take(5)->pluck('name')->implode(', ') . ')'
+                        : ' (Tidak ada alternatif yang mirip di inventaris)';
+
+                    $notFoundMedicines[] = "- {$queryName} (Diminta Qty: {$qty}, Signa: " . ($item['signa'] ?? '-') . "){$altText}";
                 }
             }
 
@@ -219,10 +214,81 @@ class PrescriptionController extends Controller
                 'notes'             => $notes,
             ]);
 
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             Log::error('Prescription OCR Error: ' . $e->getMessage());
             return response()->json(['message' => 'Gagal memproses gambar dengan AI: ' . $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Cocokkan nama obat hasil OCR ke master obat TANPA menebak.
+     * Obat hanya dipilih otomatis bila hasilnya tunggal; jika ada beberapa kandidat
+     * (mis. kekuatan berbeda) atau kekuatan di resep tidak cocok, apoteker harus memilih manual.
+     *
+     * @return array{match: ?Medicine, candidates: \Illuminate\Support\Collection, reason: string}
+     */
+    private function findMedicineMatch(string $queryName): array
+    {
+        $q = trim(preg_replace('/\s+/', ' ', $queryName));
+
+        // Pisahkan nama dari kekuatan/dosis ("Amoxicillin 500 mg" => nama "Amoxicillin", dosis 500).
+        // Nama dicari dulu, dosis dipakai kemudian untuk menyaring kandidat.
+        $nameOnly = trim(preg_replace('/\d+(?:[.,]\d+)?\s*(?:mg|mcg|gr|g|ml|iu|%)?/iu', '', $q));
+        $searchTerm = mb_strlen($nameOnly) >= 3 ? $nameOnly : $q;
+        $like = addcslashes($searchTerm, '%_\\'); // jangan biarkan % dan _ dari OCR menjadi wildcard
+
+        $candidates = Medicine::where('is_active', true)
+            ->where(function ($w) use ($like) {
+                $w->where('name', 'ilike', "%{$like}%")
+                    ->orWhere('generic_name', 'ilike', "%{$like}%")
+                    ->orWhere('sku', 'ilike', $like);
+            })
+            ->orderBy('name')
+            ->limit(10)
+            ->get();
+
+        if ($candidates->isEmpty()) {
+            // Saran alternatif: kata pertama nama (minimal 3 huruf)
+            $firstWord = mb_substr(preg_split('/\s+/', $q)[0] ?? '', 0, 6);
+            if (mb_strlen($firstWord) >= 3) {
+                $fw = addcslashes($firstWord, '%_\\');
+                $candidates = Medicine::where('is_active', true)->where('name', 'ilike', "%{$fw}%")->orderBy('name')->limit(5)->get();
+            }
+            return ['match' => null, 'candidates' => $candidates, 'reason' => 'Nama tidak ditemukan'];
+        }
+
+        // Kekuatan/dosis yang tertulis di resep (mis. 500, 0.5) harus ada pada obat yang dipilih.
+        preg_match_all('/\d+(?:[.,]\d+)?/', $q, $m);
+        $numbers = $m[0] ?? [];
+        if (!empty($numbers)) {
+            $withStrength = $candidates->filter(function ($med) use ($numbers) {
+                $haystack = $med->name . ' ' . $med->dosage_strength;
+                foreach ($numbers as $n) {
+                    if (!preg_match('/(?<![\d.,])' . preg_quote($n, '/') . '(?![\d])/', $haystack)) {
+                        return false;
+                    }
+                }
+                return true;
+            })->values();
+
+            if ($withStrength->isEmpty()) {
+                return ['match' => null, 'candidates' => $candidates, 'reason' => 'Kekuatan/dosis pada resep tidak cocok dengan stok'];
+            }
+            $candidates = $withStrength;
+        }
+
+        $exact = $candidates->filter(fn ($med) => in_array(mb_strtolower($med->name), [mb_strtolower($q), mb_strtolower($searchTerm)], true))->values();
+        if ($exact->count() === 1) {
+            return ['match' => $exact->first(), 'candidates' => $candidates, 'reason' => ''];
+        }
+
+        if ($candidates->count() === 1) {
+            return ['match' => $candidates->first(), 'candidates' => $candidates, 'reason' => ''];
+        }
+
+        return ['match' => null, 'candidates' => $candidates, 'reason' => 'Ada beberapa obat yang cocok, pilih manual'];
     }
 
     public function destroy(Prescription $prescription)
