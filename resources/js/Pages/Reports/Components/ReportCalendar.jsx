@@ -8,7 +8,8 @@ export default function ReportCalendar({
     calendarData, 
     selectedDate, 
     setSelectedDate, 
-    monthSales, 
+    daySales = [], 
+    isDayLoading = false, 
     formatRupiah 
 }) {
     const calDate = calendarMonth ? new Date(calendarMonth) : new Date();
@@ -18,8 +19,9 @@ export default function ReportCalendar({
     const firstDay = getFirstDayOfMonth(currentYear, currentMonth);
     const monthName = calDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
 
-    const selectedDateTransactions = selectedDate && monthSales
-        ? monthSales.filter(sale => sale.sale_date.startsWith(selectedDate))
+    // Filter tanggal menjaga agar data hari sebelumnya tidak tampil sesaat sebelum respons server tiba.
+    const selectedDateTransactions = selectedDate && daySales
+        ? daySales.filter(sale => String(sale.sale_date).startsWith(selectedDate))
         : [];
 
     return (
@@ -78,6 +80,12 @@ export default function ReportCalendar({
                             </button>
                         </div>
                         <div className="overflow-y-auto p-6 custom-scrollbar space-y-3">
+                            {isDayLoading && selectedDateTransactions.length === 0 && (
+                                <p className="text-center text-sm text-gray-400 py-6">Memuat transaksi...</p>
+                            )}
+                            {!isDayLoading && selectedDateTransactions.length === 0 && (
+                                <p className="text-center text-sm text-gray-400 py-6">Tidak ada transaksi pada tanggal ini.</p>
+                            )}
                             {selectedDateTransactions.map(tx => (
                                 <div key={tx.id} className="flex justify-between items-center p-4 rounded-xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-[#151E24]">
                                     <div>

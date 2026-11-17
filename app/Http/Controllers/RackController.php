@@ -17,9 +17,9 @@ class RackController extends Controller
         $trashed = $request->boolean('trashed', false);
 
         if ($trashed) {
-            $racks = Rack::onlyTrashed()->with('locationType')->latest('deleted_at')->get();
+            $racks = Rack::onlyTrashed()->with('locationType')->latest('deleted_at')->orderByDesc('id')->paginate(25)->withQueryString();
         } else {
-            $racks = Rack::with('locationType')->latest()->get();
+            $racks = Rack::with('locationType')->latest()->orderByDesc('id')->paginate(25)->withQueryString();
         }
 
         return Inertia::render('Racks/Index', [

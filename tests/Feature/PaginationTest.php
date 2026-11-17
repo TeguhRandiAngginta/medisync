@@ -198,4 +198,73 @@ class PaginationTest extends TestCase
         $this->assertCount(25, $trashRoute1['data']);
         $this->assertCount(2, $trashRoute2['data']);
     }
+
+    public function test_suppliers_racks_and_users_are_paginated(): void
+    {
+        $type = SupplierType::firstOrCreate(['name' => 'PBF'], ['prefix_code' => 'PBF']);
+        $locationType = \App\Models\LocationType::create(['name' => 'Rak', 'prefix_code' => 'RK']);
+        for ($i = 1; $i <= 30; $i++) {
+            Supplier::create(['supplier_type_id' => $type->id, 'code' => "S{$i}", 'name' => "Pemasok {$i}", 'is_active' => true]);
+            \App\Models\Rack::create(['branch_id' => $this->admin->branch_id, 'location_type_id' => $locationType->id, 'code' => "R{$i}", 'name' => "Rak {$i}", 'is_active' => true]);
+        }
+        Supplier::where('code', 'S1')->first()->delete();
+        \App\Models\Rack::where('code', 'R1')->first()->delete();
+        User::factory()->count(29)->create(['role_id' => $this->admin->role_id, 'branch_id' => $this->admin->branch_id, 'is_active' => true]); // + admin = 30
+
+        $suppliers = $this->props('/suppliers')['suppliers'];
+        $racks = $this->props('/racks')['racks'];
+        $users = $this->props('/users')['users'];
+
+        $this->assertSame(29, $suppliers['total']);
+        $this->assertCount(25, $suppliers['data']);
+        $this->assertSame(1, $this->props('/suppliers?trashed=1')['suppliers']['total']);
+        $this->assertSame(29, $racks['total']);
+        $this->assertCount(25, $racks['data']);
+        $this->assertSame(1, $this->props('/racks?trashed=1')['racks']['total']);
+        $this->assertSame(30, $users['total']);
+        $this->assertCount(25, $users['data']);
+        $this->assertCount(5, $this->props('/users?page=2')['users']['data']);
+    }
+
+    private function saleOn(string $invoice, \Carbon\Carbon $when): Sale
+    {
+        return Sale::create([
+            'invoice_number' => $invoice, 'user_id' => $this->admin->id, 'total_amount' => 10000, 'subtotal_amount' => 10000,
+            'paid_amount' => 10000, 'change_amount' => 0, 'payment_method' => 'Cash', 'sale_date' => $when,
+        ]);
+    }
+
+    public function test_report_calendar_loads_only_the_selected_day_on_demand(): void
+    {
+        $day = now()->startOfMonth()->addDays(2);
+        $this->saleOn('INV-DAY-1', $day->copy()->setTime(9, 0));
+        $this->saleOn('INV-DAY-2', $day->copy()->setTime(15, 30));
+        $this->saleOn('INV-OTHER-DAY', $day->copy()->addDay()->setTime(10, 0));
+
+        $base = '/reports?start_date=' . now()->startOfMonth()->toDateString() . '&end_date=' . now()->endOfMonth()->toDateString();
+
+        $without = $this->props($base);
+        $this->assertArrayNotHasKey('monthSales', $without, 'Satu bulan penuh tidak lagi dikirim.');
+        $this->assertSame([], $without['daySales']);
+
+        $with = $this->props($base . '&day=' . $day->toDateString());
+        $this->assertSame(['INV-DAY-2', 'INV-DAY-1'], collect($with['daySales'])->pluck('invoice_number')->all());
+        $this->assertSame($this->admin->name, collect($with['daySales'])->first()['user']['name']);
+
+        // Kalender tetap menandai hari yang punya transaksi (agregat per hari).
+        $this->assertCount(2, $with['calendarData']);
+    }
+
+    public function test_report_calendar_ignores_invalid_day_and_caps_result(): void
+    {
+        $day = now()->startOfMonth()->addDay();
+        for ($i = 1; $i <= 205; $i++) {
+            $this->saleOn(sprintf('INV-BULK-%03d', $i), $day->copy()->setTime(8, 0)->addSeconds($i));
+        }
+        $base = '/reports?start_date=' . now()->startOfMonth()->toDateString() . '&end_date=' . now()->endOfMonth()->toDateString();
+
+        $this->assertSame([], $this->props($base . '&day=bukan-tanggal')['daySales']);
+        $this->assertSame([], $this->props($base . '&day=2026-02-31')['daySales']);
+        $this->assertCount(200, $this->props($base . '&day=' . $day->toDateString())['daySales']);
+    }
 }

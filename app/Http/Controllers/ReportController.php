@@ -80,11 +80,19 @@ class ReportController extends Controller
             ->get()
             ->keyBy('date');
 
-        $monthSales = Sale::with('user')
-            ->whereMonth('sale_date', $calMonth)
-            ->whereYear('sale_date', $calYear)
-            ->orderBy('sale_date', 'desc')
-            ->get();
+        // Rincian transaksi satu hari dimuat saat tanggal di kalender diklik (?day=Y-m-d), bukan satu bulan penuh.
+        $daySales = [];
+        $day = $request->query('day');
+        if (is_string($day)) {
+            $parsed = \DateTime::createFromFormat('Y-m-d', $day);
+            if ($parsed && $parsed->format('Y-m-d') === $day) {
+                $daySales = Sale::with('user')
+                    ->whereBetween('sale_date', [$day . ' 00:00:00', $day . ' 23:59:59'])
+                    ->orderByDesc('sale_date')->orderByDesc('id')
+                    ->limit(200)
+                    ->get();
+            }
+        }
 
         $medicinesList = Medicine::where('is_active', true)->select('id', 'name', 'sku', 'stock', 'base_unit')->get();
 
@@ -104,7 +112,7 @@ class ReportController extends Controller
             ],
             'salesList'      => $salesList,
             'calendarData'   => $calendarData,
-            'monthSales'     => $monthSales,
+            'daySales'       => $daySales,
             'stockMutations' => $stockMutations,
             'medicinesList'  => $medicinesList,
             'calendarMonth'  => Carbon::parse($startDate)->format('Y-m-d')

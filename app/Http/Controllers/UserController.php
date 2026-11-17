@@ -13,7 +13,7 @@ class UserController extends Controller
 {
     public function index()
     {
-        $users = User::with(['role', 'branch'])->latest()->get();
+        $users = User::with(['role', 'branch'])->latest()->orderByDesc('id')->paginate(25)->withQueryString();
         return Inertia::render('Users/Index', ['users' => $users]);
     }
 

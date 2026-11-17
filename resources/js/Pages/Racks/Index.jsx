@@ -1,6 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
+import Pagination from '@/Components/Pagination';
 
 const EditIcon = () => (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -20,10 +21,14 @@ const RestoreIcon = () => (
     </svg>
 );
 
-export default function Index({ racks, trashed, trashedCount }) {
+export default function Index({ racks: racksPage, trashed, trashedCount }) {
+    const racks = racksPage?.data ?? [];
     const { flash, errors } = usePage().props;
 
     const [selectedIds, setSelectedIds]                 = useState([]);
+
+    // Pilihan hanya berlaku untuk halaman yang tampil: kosongkan saat pindah halaman/tab.
+    useEffect(() => { setSelectedIds([]); }, [racksPage?.current_page, trashed]);
     const [confirmDelete, setConfirmDelete]             = useState(null);       // rack object
     const [confirmForceDelete, setConfirmForceDelete]   = useState(null);       // rack object
     const [confirmBulkDelete, setConfirmBulkDelete]     = useState(false);
@@ -253,6 +258,8 @@ export default function Index({ racks, trashed, trashedCount }) {
                     </tbody>
                 </table>
             </div>
+
+            <Pagination links={racksPage?.links} meta={racksPage} />
 
             {/* MODAL: Konfirmasi Soft Delete */}
             {confirmDelete && (

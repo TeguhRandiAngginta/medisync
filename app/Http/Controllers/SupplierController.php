@@ -17,9 +17,9 @@ class SupplierController extends Controller
         $trashed = $request->boolean('trashed', false);
 
         if ($trashed) {
-            $suppliers = Supplier::onlyTrashed()->with('supplierType')->latest('deleted_at')->get();
+            $suppliers = Supplier::onlyTrashed()->with('supplierType')->latest('deleted_at')->orderByDesc('id')->paginate(25)->withQueryString();
         } else {
-            $suppliers = Supplier::with('supplierType')->latest()->get();
+            $suppliers = Supplier::with('supplierType')->latest()->orderByDesc('id')->paginate(25)->withQueryString();
         }
 
         return Inertia::render('Suppliers/Index', [
