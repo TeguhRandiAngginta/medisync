@@ -8,6 +8,7 @@ use App\Models\SupplierType;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
+use App\Support\ReferenceUsage;
 
 class SupplierController extends Controller
 {
@@ -122,7 +123,10 @@ class SupplierController extends Controller
 
     public function destroy(Supplier $supplier)
     {
-        // Soft delete SELALU diizinkan — tidak perlu cek relasi (FK tidak dilanggar)
+        if ($usage = ReferenceUsage::blocker('supplier', $supplier->id)) {
+            return back()->withErrors(['message' => ReferenceUsage::message('Pemasok', $supplier->name, $usage)]);
+        }
+
         DB::beginTransaction();
         try {
             $supplierName = $supplier->name;
@@ -218,17 +222,31 @@ class SupplierController extends Controller
             'ids.*' => 'exists:suppliers,id',
         ]);
 
-        // Soft delete SELALU diizinkan — langsung pindah ke trash tanpa cek relasi
+        // Yang masih dipakai data aktif dilewati (lihat ReferenceUsage); sisanya dipindahkan ke trash.
         DB::beginTransaction();
         try {
             $suppliers = Supplier::whereIn('id', $validated['ids'])->get();
+            $deleted = 0;
+            $failed = [];
             foreach ($suppliers as $supplier) {
+                if ($usage = ReferenceUsage::blocker('supplier', $supplier->id)) {
+                    $failed[] = "{$supplier->name} ({$usage})";
+                    continue;
+                }
                 $supplier->delete();
+                $deleted++;
             }
-            AuditLog::record('supplier', 'BULK_DELETE', 'Memindahkan ' . count($suppliers) . ' pemasok ke keranjang sampah.');
+
+            if ($deleted === 0 && count($failed) > 0) {
+                DB::rollBack();
+                return back()->withErrors(['message' => 'Seluruh pemasok terpilih masih dipakai dan tidak dapat dihapus: ' . implode('; ', $failed) . '. Pindahkan atau hapus data yang memakainya terlebih dahulu.']);
+            }
+
+            $skipNote = count($failed) > 0 ? ' Dilewati karena masih dipakai: ' . implode('; ', $failed) . '.' : '';
+            AuditLog::record('supplier', 'BULK_DELETE', 'Memindahkan ' . $deleted . ' pemasok ke keranjang sampah.');
             DB::commit();
 
-            return redirect()->route('suppliers.index')->with('success', count($suppliers) . ' pemasok berhasil dipindahkan ke tong sampah.');
+            return redirect()->route('suppliers.index')->with('success', $deleted . ' pemasok berhasil dipindahkan ke tong sampah.' . $skipNote);
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['message' => 'Gagal hapus massal: ' . $e->getMessage()]);

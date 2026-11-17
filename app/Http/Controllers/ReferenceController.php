@@ -9,6 +9,7 @@ use App\Models\SupplierType;
 use App\Models\MedicineCategory;
 use App\Models\AuditLog;
 use App\Models\Supplier;
+use App\Support\ReferenceUsage;
 use Illuminate\Support\Facades\DB;
 
 class ReferenceController extends Controller
@@ -85,7 +86,10 @@ class ReferenceController extends Controller
 
     public function destroyLocationType(LocationType $locationType)
     {
-        // Soft delete SELALU diizinkan — tidak perlu cek relasi
+        if ($usage = ReferenceUsage::blocker('location_type', $locationType->id)) {
+            return back()->withErrors(['message' => ReferenceUsage::message('Tipe lokasi', $locationType->name, $usage)]);
+        }
+
         DB::beginTransaction();
         try {
             $name = $locationType->name;
@@ -147,16 +151,30 @@ class ReferenceController extends Controller
             'ids.*' => 'exists:location_types,id',
         ]);
 
-        // Soft delete SELALU diizinkan
+        // Yang masih dipakai data aktif dilewati (lihat ReferenceUsage); sisanya dipindahkan ke trash.
         DB::beginTransaction();
         try {
             $types = LocationType::whereIn('id', $validated['ids'])->get();
+            $deleted = 0;
+            $failed = [];
             foreach ($types as $type) {
+                if ($usage = ReferenceUsage::blocker('location_type', $type->id)) {
+                    $failed[] = "{$type->name} ({$usage})";
+                    continue;
+                }
                 $type->delete();
+                $deleted++;
             }
-            AuditLog::record('referensi', 'BULK_DELETE', 'Memindahkan ' . count($types) . ' tipe lokasi ke keranjang sampah.');
+
+            if ($deleted === 0 && count($failed) > 0) {
+                DB::rollBack();
+                return back()->withErrors(['message' => 'Seluruh tipe lokasi terpilih masih dipakai dan tidak dapat dihapus: ' . implode('; ', $failed) . '. Pindahkan atau hapus data yang memakainya terlebih dahulu.']);
+            }
+
+            $skipNote = count($failed) > 0 ? ' Dilewati karena masih dipakai: ' . implode('; ', $failed) . '.' : '';
+            AuditLog::record('referensi', 'BULK_DELETE', 'Memindahkan ' . $deleted . ' tipe lokasi ke keranjang sampah.');
             DB::commit();
-            return back()->with('success', count($types) . ' tipe lokasi berhasil dipindahkan ke tong sampah.');
+            return back()->with('success', $deleted . ' tipe lokasi berhasil dipindahkan ke tong sampah.' . $skipNote);
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['message' => 'Gagal hapus massal: ' . $e->getMessage()]);
@@ -264,7 +282,10 @@ class ReferenceController extends Controller
 
     public function destroySupplierType(SupplierType $supplierType)
     {
-        // Soft delete SELALU diizinkan — tidak perlu cek relasi
+        if ($usage = ReferenceUsage::blocker('supplier_type', $supplierType->id)) {
+            return back()->withErrors(['message' => ReferenceUsage::message('Tipe supplier', $supplierType->name, $usage)]);
+        }
+
         DB::beginTransaction();
         try {
             $name = $supplierType->name;
@@ -326,16 +347,30 @@ class ReferenceController extends Controller
             'ids.*' => 'exists:supplier_types,id',
         ]);
 
-        // Soft delete SELALU diizinkan
+        // Yang masih dipakai data aktif dilewati (lihat ReferenceUsage); sisanya dipindahkan ke trash.
         DB::beginTransaction();
         try {
             $types = SupplierType::whereIn('id', $validated['ids'])->get();
+            $deleted = 0;
+            $failed = [];
             foreach ($types as $type) {
+                if ($usage = ReferenceUsage::blocker('supplier_type', $type->id)) {
+                    $failed[] = "{$type->name} ({$usage})";
+                    continue;
+                }
                 $type->delete();
+                $deleted++;
             }
-            AuditLog::record('referensi', 'BULK_DELETE', 'Memindahkan ' . count($types) . ' tipe supplier ke keranjang sampah.');
+
+            if ($deleted === 0 && count($failed) > 0) {
+                DB::rollBack();
+                return back()->withErrors(['message' => 'Seluruh tipe supplier terpilih masih dipakai dan tidak dapat dihapus: ' . implode('; ', $failed) . '. Pindahkan atau hapus data yang memakainya terlebih dahulu.']);
+            }
+
+            $skipNote = count($failed) > 0 ? ' Dilewati karena masih dipakai: ' . implode('; ', $failed) . '.' : '';
+            AuditLog::record('referensi', 'BULK_DELETE', 'Memindahkan ' . $deleted . ' tipe supplier ke keranjang sampah.');
             DB::commit();
-            return back()->with('success', count($types) . ' tipe supplier berhasil dipindahkan ke tong sampah.');
+            return back()->with('success', $deleted . ' tipe supplier berhasil dipindahkan ke tong sampah.' . $skipNote);
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['message' => 'Gagal hapus massal: ' . $e->getMessage()]);
@@ -439,7 +474,10 @@ class ReferenceController extends Controller
 
     public function destroyMedicineCategory(MedicineCategory $medicineCategory)
     {
-        // Soft delete SELALU diizinkan — tidak perlu cek relasi (FK tidak dilanggar)
+        if ($usage = ReferenceUsage::blocker('medicine_category', $medicineCategory->id)) {
+            return back()->withErrors(['message' => ReferenceUsage::message('Golongan obat', $medicineCategory->name, $usage)]);
+        }
+
         DB::beginTransaction();
         try {
             $name = $medicineCategory->name;
@@ -497,16 +535,30 @@ class ReferenceController extends Controller
             'ids.*' => 'exists:medicine_categories,id',
         ]);
 
-        // Soft delete SELALU diizinkan — langsung pindah ke trash tanpa cek relasi
+        // Yang masih dipakai data aktif dilewati (lihat ReferenceUsage); sisanya dipindahkan ke trash.
         DB::beginTransaction();
         try {
             $categories = MedicineCategory::whereIn('id', $validated['ids'])->get();
+            $deleted = 0;
+            $failed = [];
             foreach ($categories as $cat) {
+                if ($usage = ReferenceUsage::blocker('medicine_category', $cat->id)) {
+                    $failed[] = "{$cat->name} ({$usage})";
+                    continue;
+                }
                 $cat->delete();
+                $deleted++;
             }
-            AuditLog::record('referensi', 'BULK_DELETE', 'Memindahkan ' . count($categories) . ' golongan obat ke keranjang sampah.');
+
+            if ($deleted === 0 && count($failed) > 0) {
+                DB::rollBack();
+                return back()->withErrors(['message' => 'Seluruh golongan obat terpilih masih dipakai dan tidak dapat dihapus: ' . implode('; ', $failed) . '. Pindahkan atau hapus data yang memakainya terlebih dahulu.']);
+            }
+
+            $skipNote = count($failed) > 0 ? ' Dilewati karena masih dipakai: ' . implode('; ', $failed) . '.' : '';
+            AuditLog::record('referensi', 'BULK_DELETE', 'Memindahkan ' . $deleted . ' golongan obat ke keranjang sampah.');
             DB::commit();
-            return back()->with('success', count($categories) . ' golongan obat berhasil dipindahkan ke tong sampah.');
+            return back()->with('success', $deleted . ' golongan obat berhasil dipindahkan ke tong sampah.' . $skipNote);
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['message' => 'Gagal hapus massal: ' . $e->getMessage()]);

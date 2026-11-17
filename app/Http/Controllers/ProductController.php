@@ -26,7 +26,7 @@ class ProductController extends Controller
     {
         $showTrashed = $request->boolean('trashed');
 
-        $query = Medicine::with(['category', 'supplier', 'rack', 'batches'])
+        $query = Medicine::with(['category' => fn ($q) => $q->withTrashed(), 'supplier' => fn ($q) => $q->withTrashed(), 'rack' => fn ($q) => $q->withTrashed(), 'batches'])
             ->when($showTrashed, fn($q) => $q->onlyTrashed())
             ->latest()
             ->orderByDesc('id');

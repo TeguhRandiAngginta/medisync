@@ -8,6 +8,7 @@ use App\Models\AuditLog;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
+use App\Support\ReferenceUsage;
 
 class RackController extends Controller
 {
@@ -96,7 +97,10 @@ class RackController extends Controller
 
     public function destroy(Rack $rack)
     {
-        // Soft delete SELALU diizinkan — tidak perlu cek relasi (FK tidak dilanggar)
+        if ($usage = ReferenceUsage::blocker('rack', $rack->id)) {
+            return back()->withErrors(['message' => ReferenceUsage::message('Lokasi rak', $rack->name, $usage)]);
+        }
+
         DB::beginTransaction();
         try {
             $rackName = $rack->name;
@@ -166,17 +170,31 @@ class RackController extends Controller
             'ids.*' => 'exists:racks,id',
         ]);
 
-        // Soft delete SELALU diizinkan — langsung pindah ke trash tanpa cek relasi
+        // Yang masih dipakai data aktif dilewati (lihat ReferenceUsage); sisanya dipindahkan ke trash.
         DB::beginTransaction();
         try {
             $racks = Rack::whereIn('id', $validated['ids'])->get();
+            $deleted = 0;
+            $failed = [];
             foreach ($racks as $rack) {
+                if ($usage = ReferenceUsage::blocker('rack', $rack->id)) {
+                    $failed[] = "{$rack->name} ({$usage})";
+                    continue;
+                }
                 $rack->delete();
+                $deleted++;
             }
-            AuditLog::record('rak', 'BULK_DELETE', 'Memindahkan ' . count($racks) . ' lokasi rak ke keranjang sampah.');
+
+            if ($deleted === 0 && count($failed) > 0) {
+                DB::rollBack();
+                return back()->withErrors(['message' => 'Seluruh lokasi rak terpilih masih dipakai dan tidak dapat dihapus: ' . implode('; ', $failed) . '. Pindahkan atau hapus data yang memakainya terlebih dahulu.']);
+            }
+
+            $skipNote = count($failed) > 0 ? ' Dilewati karena masih dipakai: ' . implode('; ', $failed) . '.' : '';
+            AuditLog::record('rak', 'BULK_DELETE', 'Memindahkan ' . $deleted . ' lokasi rak ke keranjang sampah.');
             DB::commit();
 
-            return redirect()->route('racks.index')->with('success', count($racks) . ' lokasi rak berhasil dipindahkan ke tong sampah.');
+            return redirect()->route('racks.index')->with('success', $deleted . ' lokasi rak berhasil dipindahkan ke tong sampah.' . $skipNote);
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['message' => 'Gagal hapus massal: ' . $e->getMessage()]);
