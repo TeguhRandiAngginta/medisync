@@ -5,6 +5,7 @@ import ExportModal from './Components/ExportModal';
 import ReportTable from './Components/ReportTable';
 import ReportCalendar from './Components/ReportCalendar';
 import ReportStockLedger from './Components/ReportStockLedger';
+import Pagination from '@/Components/Pagination';
 
 const formatRupiah = (number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number);
 
@@ -241,7 +242,12 @@ export default function Index({
                         </div>
                     </div>
 
-                    {activeView === 'table' && <ReportTable salesList={salesList} formatRupiah={formatRupiah} />}
+                    {activeView === 'table' && (
+                        <>
+                            <ReportTable salesList={salesList?.data ?? []} formatRupiah={formatRupiah} />
+                            <Pagination links={salesList?.links} meta={salesList} />
+                        </>
+                    )}
                     
                     {activeView === 'calendar' && (
                         <ReportCalendar 
@@ -255,7 +261,10 @@ export default function Index({
                     )}
 
                     {activeView === 'ledger' && (
-                        <ReportStockLedger stockMutations={stockMutations} />
+                        <>
+                            <ReportStockLedger stockMutations={stockMutations?.data ?? []} />
+                            <Pagination links={stockMutations?.links} meta={stockMutations} />
+                        </>
                     )}
                 </div>
 

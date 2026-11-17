@@ -1,7 +1,9 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router } from '@inertiajs/react';
+import Pagination from '@/Components/Pagination';
 
-export default function Index({ logs, currentTab }) {
+export default function Index({ logs: logsPage, currentTab }) {
+    const logs = logsPage?.data ?? [];
     const tabs = [
         { id: 'akun', label: 'Pengguna & Akun' },
         { id: 'inventaris', label: 'Inventaris' },
@@ -107,6 +109,8 @@ export default function Index({ logs, currentTab }) {
                     </table>
                 </div>
             </div>
+
+            <Pagination links={logsPage?.links} meta={logsPage} />
         </AuthenticatedLayout>
     );
 }

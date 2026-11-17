@@ -28,9 +28,10 @@ class ProductController extends Controller
 
         $query = Medicine::with(['category', 'supplier', 'rack', 'batches'])
             ->when($showTrashed, fn($q) => $q->onlyTrashed())
-            ->latest();
+            ->latest()
+            ->orderByDesc('id');
 
-        $products = $query->get();
+        $products = $query->paginate(25)->withQueryString();
         $trashedCount = Medicine::onlyTrashed()->count();
 
         return Inertia::render('Products/Index', [

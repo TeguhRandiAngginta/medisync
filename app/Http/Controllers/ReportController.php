@@ -40,25 +40,35 @@ class ReportController extends Controller
             }
         }
 
-        $salesQuery = Sale::with(['user', 'details.medicine'])
-            ->whereBetween('sale_date', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-            ->orderBy('sale_date', 'desc');
-            
-        $salesList = $salesQuery->get();
+        $rangeSales = fn () => Sale::whereBetween('sale_date', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
 
-        $totalSales = $salesList->sum('total_amount');
-        $totalTransactions = $salesList->count();
-        $totalHpp = 0;
+        // Ringkasan dihitung dari seluruh periode (bukan hanya halaman yang tampil).
+        $totalSales = (float) $rangeSales()->sum('total_amount');
+        $totalTransactions = $rangeSales()->count();
+        $totalHpp = 0.0;
 
-        foreach ($salesList as $sale) {
-            $totalHpp += $this->saleHpp($sale);
-        }
+        $rangeSales()->with('details.medicine')->chunkById(500, function ($chunk) use (&$totalHpp) {
+            foreach ($chunk as $sale) {
+                $totalHpp += $this->saleHpp($sale);
+            }
+        });
+
+        // Daftar transaksi dipaginasi agar periode panjang (mis. tahunan) tidak memuat semuanya.
+        $salesList = $rangeSales()->with('user')
+            ->orderBy('sale_date', 'desc')
+            ->orderByDesc('id')
+            ->paginate(25, ['*'], 'sales_page')
+            ->withQueryString();
         
         $profit = $totalSales - $totalHpp;
 
         $lowStockCount = Medicine::lowStock()->count();
 
-        $stockMutations = $this->generateStockLedger($medicineId, $startDate, $endDate);
+        $stockMutations = $this->paginateArray(
+            $this->generateStockLedger($medicineId, $startDate, $endDate),
+            25,
+            'ledger_page'
+        );
 
         $calMonth = Carbon::parse($startDate)->month;
         $calYear = Carbon::parse($startDate)->year;
@@ -99,6 +109,20 @@ class ReportController extends Controller
             'medicinesList'  => $medicinesList,
             'calendarMonth'  => Carbon::parse($startDate)->format('Y-m-d')
         ]);
+    }
+
+    /** Paginasi untuk array hasil hitung (mis. kartu stok) dengan format sama seperti paginator Eloquent. */
+    private function paginateArray(array $items, int $perPage, string $pageName): \Illuminate\Pagination\LengthAwarePaginator
+    {
+        $page = max(1, (int) request()->input($pageName, 1));
+
+        return (new \Illuminate\Pagination\LengthAwarePaginator(
+            array_slice($items, ($page - 1) * $perPage, $perPage),
+            count($items),
+            $perPage,
+            $page,
+            ['path' => request()->url(), 'pageName' => $pageName]
+        ))->withQueryString();
     }
 
     /**
