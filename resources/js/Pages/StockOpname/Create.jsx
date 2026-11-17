@@ -8,7 +8,9 @@ import InputError from '@/Components/InputError';
 const MEDISYNC_BTN_CLASS = "px-6 py-2.5 rounded-md text-sm font-bold flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-[#48CFA4] text-white hover:bg-[#3bb890] shadow-sm dark:bg-[#253939] dark:text-[#67E2B4] dark:hover:bg-[#2d4747] dark:border dark:border-[#30413B] dark:shadow-none cursor-pointer";
 
 export default function StockOpnameCreate({ medicines = [] }) {
-    const [selectedMedicineId, setSelectedMedicineId] = useState('');
+    // Obat terpilih disimpan sebagai objek (bukan dicari dari daftar), karena daftar obat
+    // kini hasil pencarian server dan tidak memuat seluruh katalog.
+    const [selectedMedicine, setSelectedMedicine] = useState(null);
 
     const { data, setData, post, processing, errors } = useForm({
         product_batch_id: '',
@@ -16,10 +18,6 @@ export default function StockOpnameCreate({ medicines = [] }) {
         type: 'CORRECTION',
         notes: '',
     });
-
-    const selectedMedicine = useMemo(() => {
-        return medicines.find((m) => String(m.id) === String(selectedMedicineId)) || null;
-    }, [medicines, selectedMedicineId]);
 
     const selectedBatch = useMemo(() => {
         if (!selectedMedicine || !data.product_batch_id) return null;
@@ -35,7 +33,7 @@ export default function StockOpnameCreate({ medicines = [] }) {
 
     const handleSelectMedicine = (med) => {
         if (!med) {
-            setSelectedMedicineId('');
+            setSelectedMedicine(null);
             setData({
                 ...data,
                 product_batch_id: '',
@@ -44,7 +42,7 @@ export default function StockOpnameCreate({ medicines = [] }) {
             return;
         }
 
-        setSelectedMedicineId(med.id);
+        setSelectedMedicine(med);
         setData({
             ...data,
             product_batch_id: '',
@@ -143,7 +141,7 @@ export default function StockOpnameCreate({ medicines = [] }) {
                             </label>
                             <MedicineCombobox
                                 medicines={medicines}
-                                selectedMedicineId={selectedMedicineId}
+                                selectedMedicine={selectedMedicine}
                                 onSelect={handleSelectMedicine}
                                 error={errors.medicine_id}
                             />

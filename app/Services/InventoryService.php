@@ -193,6 +193,15 @@ class InventoryService
             
             $difference = $actualStock - $systemStock;
 
+            if ($difference === 0) {
+                throw new Exception("Stok fisik sama dengan stok sistem ({$systemStock}); tidak ada selisih yang perlu dicatat.");
+            }
+
+            // Rusak/kedaluwarsa/hilang hanya boleh mengurangi stok.
+            if (in_array($type, ['DAMAGE', 'EXPIRED', 'LOST'], true) && $difference > 0) {
+                throw new Exception("Tipe {$type} tidak boleh menambah stok (sistem {$systemStock}, fisik {$actualStock}). Gunakan tipe CORRECTION untuk koreksi penambahan.");
+            }
+
             $batch->update(['stock_quantity' => $actualStock]);
 
             StockAdjustment::create([

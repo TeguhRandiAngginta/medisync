@@ -3,6 +3,7 @@ import { Head, Link, usePage, router } from '@inertiajs/react';
 import PrimaryButton from '@/Components/PrimaryButton';
 import ConfirmModal from '@/Components/ConfirmModal'; // Import komponen baru kita
 import { useState } from 'react';
+import Pagination from '@/Components/Pagination';
 
 const EditIcon = () => (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -16,7 +17,8 @@ const DeleteIcon = () => (
     </svg>
 );
 
-export default function Index({ users }) {
+export default function Index({ users: usersPage }) {
+    const users = usersPage?.data ?? [];
     const currentUser = usePage().props.auth.user;
     
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -101,6 +103,8 @@ export default function Index({ users }) {
                     </tbody>
                 </table>
             </div>
+
+            <Pagination links={usersPage?.links} meta={usersPage} />
 
             {/* Pemanggilan Komponen Modal Universal */}
             <ConfirmModal 

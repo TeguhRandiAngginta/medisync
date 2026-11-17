@@ -34,6 +34,12 @@ class Medicine extends Model
         'is_active' => 'boolean',
     ];
 
+    /** Obat aktif yang stoknya sudah di/bawah batas minimumnya sendiri (min_stock). */
+    public function scopeLowStock($query)
+    {
+        return $query->where('is_active', true)->whereColumn('stock', '<=', 'min_stock');
+    }
+
     public function category()
     {
         return $this->belongsTo(MedicineCategory::class, 'medicine_category_id');

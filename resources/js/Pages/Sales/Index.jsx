@@ -24,7 +24,7 @@ const PrintIcon = () => (
     </svg>
 );
 
-export default function Index({ sales, isTrash = false, trashed = false, trashedCount = 0, filters = {} }) {
+export default function Index({ sales, isTrash = false, trashed = false, trashedCount = 0, canManage = true, filters = {} }) {
     const activeTrash = Boolean(isTrash || trashed);
     const { errors } = usePage().props;
     const [authErrorModal, setAuthErrorModal] = useState(false);
@@ -367,8 +367,8 @@ export default function Index({ sales, isTrash = false, trashed = false, trashed
                         </button>
                     )}
 
-                    {/* Tab Toggle Pill */}
-                    <div className="flex rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm">
+                    {/* Tab Toggle Pill (trash hanya untuk superadmin/owner) */}
+                    {canManage && <div className="flex rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm">
                         <button
                             onClick={() => switchTab(false)}
                             className={`px-4 py-2.5 text-xs font-bold transition-colors cursor-pointer ${
@@ -401,7 +401,7 @@ export default function Index({ sales, isTrash = false, trashed = false, trashed
                                 </span>
                             )}
                         </button>
-                    </div>
+                    </div>}
                 </div>
             </div>
 

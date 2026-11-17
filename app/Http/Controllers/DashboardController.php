@@ -14,16 +14,22 @@ class DashboardController extends Controller
 {
     public function index(Request $request)
     {
+        // Data omzet seluruh toko hanya untuk superadmin (sama seperti halaman Laporan).
+        // Peran lain (kasir, apoteker) hanya melihat transaksi miliknya sendiri.
+        $isSuperadmin = (auth()->user()->role->slug ?? '') === 'superadmin';
+        $scopeUserId = $isSuperadmin ? null : auth()->id();
+        $sales = fn () => Sale::query()->when($scopeUserId, fn ($q) => $q->where('user_id', $scopeUserId));
+
         $expiringBatches = AlertService::getExpiringBatches(90);
         $lowStockMedicines = AlertService::getLowStockMedicines();
         
         $filter = $request->get('period', 'daily');
         $today = Carbon::today();
         
-        $todayRevenue = Sale::whereDate('sale_date', $today)->sum('total_amount');
-        $todayTransactions = Sale::whereDate('sale_date', $today)->count();
+        $todayRevenue = $sales()->whereDate('sale_date', $today)->sum('total_amount');
+        $todayTransactions = $sales()->whereDate('sale_date', $today)->count();
         
-        $lowStockCount = Medicine::whereColumn('stock', '<=', 'min_stock')->count();
+        $lowStockCount = Medicine::lowStock()->count();
         $activeMedicines = Medicine::where('is_active', true)->count();
 
         $chartData = [];
@@ -31,7 +37,7 @@ class DashboardController extends Controller
             for ($i = 3; $i >= 0; $i--) {
                 $start = Carbon::now()->subWeeks($i)->startOfWeek();
                 $end = Carbon::now()->subWeeks($i)->endOfWeek();
-                $total = Sale::whereBetween('sale_date', [$start, $end])->sum('total_amount');
+                $total = $sales()->whereBetween('sale_date', [$start, $end])->sum('total_amount');
                 $chartData[] = [
                     'name' => 'Minggu ' . (4 - $i), // Syntax error '-' diperbaiki
                     'total' => (float) $total
@@ -40,7 +46,7 @@ class DashboardController extends Controller
         } elseif ($filter == 'monthly') {
             for ($i = 5; $i >= 0; $i--) {
                 $month = Carbon::now()->subMonths($i);
-                $total = Sale::whereYear('sale_date', $month->year)
+                $total = $sales()->whereYear('sale_date', $month->year)
                             ->whereMonth('sale_date', $month->month)
                             ->sum('total_amount');
                 $chartData[] = [
@@ -51,14 +57,14 @@ class DashboardController extends Controller
         } elseif ($filter == 'yearly') {
             for ($i = 2; $i >= 0; $i--) {
                 $year = Carbon::now()->subYears($i)->year;
-                $total = Sale::whereYear('sale_date', $year)->sum('total_amount');
+                $total = $sales()->whereYear('sale_date', $year)->sum('total_amount');
                 $chartData[] = [
                     'name' => (string) $year,
                     'total' => (float) $total
                 ];
             }
         } else {
-            $last7Days = Sale::select(DB::raw('DATE(sale_date) as date'), DB::raw('SUM(total_amount) as total'))
+            $last7Days = $sales()->select(DB::raw('DATE(sale_date) as date'), DB::raw('SUM(total_amount) as total'))
                 ->where('sale_date', '>=', Carbon::now()->subDays(6)->startOfDay())
                 ->groupBy('date')
                 ->orderBy('date')
@@ -78,15 +84,17 @@ class DashboardController extends Controller
             ->join('sales', 'sale_details.sale_id', '=', 'sales.id')
             ->join('medicines', 'sale_details.medicine_id', '=', 'medicines.id')
             ->whereNull('sales.deleted_at')
+            ->when($scopeUserId, fn ($q) => $q->where('sales.user_id', $scopeUserId))
             ->select('medicines.name', DB::raw('SUM(sale_details.quantity) as value'))
             ->groupBy('medicines.id', 'medicines.name')
             ->orderByDesc('value')
             ->limit(4)
             ->get();
 
-        $totalCompleted = Sale::count();
+        $totalCompleted = $sales()->count();
         $paymentStats = DB::table('sales')
             ->whereNull('deleted_at')
+            ->when($scopeUserId, fn ($q) => $q->where('user_id', $scopeUserId))
             ->select('payment_method', DB::raw('COUNT(*) as count'))
             ->groupBy('payment_method')
             ->get();
@@ -99,7 +107,7 @@ class DashboardController extends Controller
             ];
         })->keyBy('method');
 
-        $recentTransactions = Sale::with('user')
+        $recentTransactions = $sales()->with('user')
             ->orderBy('sale_date', 'desc')
             ->take(5)
             ->get();
@@ -118,6 +126,7 @@ class DashboardController extends Controller
             'paymentDistribution' => $paymentDistribution,
             'recentTransactions' => $recentTransactions,
             'currentFilter' => $filter,
+            'scope' => $isSuperadmin ? 'all' : 'own',
         ]);
     }
 }

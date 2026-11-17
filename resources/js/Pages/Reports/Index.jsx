@@ -5,6 +5,7 @@ import ExportModal from './Components/ExportModal';
 import ReportTable from './Components/ReportTable';
 import ReportCalendar from './Components/ReportCalendar';
 import ReportStockLedger from './Components/ReportStockLedger';
+import Pagination from '@/Components/Pagination';
 
 const formatRupiah = (number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number);
 
@@ -14,7 +15,7 @@ export default function Index({
     summary, 
     salesList, 
     calendarData, 
-    monthSales, 
+    daySales, 
     calendarMonth, 
     currentDate,
     stockMutations,
@@ -24,7 +25,21 @@ export default function Index({
     const [endDate, setEndDate] = useState(filters?.end_date || currentDate);
     const [selectedMedicineId, setSelectedMedicineId] = useState(filters?.medicine_id || '');
     const [activeView, setActiveView] = useState('table'); // 'table' | 'calendar' | 'ledger'
-    const [selectedDate, setSelectedDate] = useState(null);
+    const [selectedDate, setSelectedDateState] = useState(null);
+    const [isDayLoading, setIsDayLoading] = useState(false);
+
+    // Rincian transaksi satu hari diambil dari server saat tanggal dipilih (partial reload hanya `daySales`).
+    const setSelectedDate = (date) => {
+        setSelectedDateState(date);
+        setIsDayLoading(Boolean(date));
+        router.get(route('reports.index'), { ...filters, ...(date ? { day: date } : {}) }, {
+            only: ['daySales'],
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            onFinish: () => setIsDayLoading(false),
+        });
+    };
     
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [exportFormat, setExportFormat] = useState('pdf');
@@ -241,7 +256,12 @@ export default function Index({
                         </div>
                     </div>
 
-                    {activeView === 'table' && <ReportTable salesList={salesList} formatRupiah={formatRupiah} />}
+                    {activeView === 'table' && (
+                        <>
+                            <ReportTable salesList={salesList?.data ?? []} formatRupiah={formatRupiah} />
+                            <Pagination links={salesList?.links} meta={salesList} />
+                        </>
+                    )}
                     
                     {activeView === 'calendar' && (
                         <ReportCalendar 
@@ -249,13 +269,17 @@ export default function Index({
                             calendarData={calendarData}
                             selectedDate={selectedDate}
                             setSelectedDate={setSelectedDate}
-                            monthSales={monthSales}
+                            daySales={daySales}
+                            isDayLoading={isDayLoading}
                             formatRupiah={formatRupiah}
                         />
                     )}
 
                     {activeView === 'ledger' && (
-                        <ReportStockLedger stockMutations={stockMutations} />
+                        <>
+                            <ReportStockLedger stockMutations={stockMutations?.data ?? []} />
+                            <Pagination links={stockMutations?.links} meta={stockMutations} />
+                        </>
                     )}
                 </div>
 

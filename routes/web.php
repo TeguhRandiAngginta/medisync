@@ -47,6 +47,7 @@ Route::middleware(['auth', 'verified', 'role:superadmin,apoteker,kasir'])->group
     Route::post('/api/prescriptions/analyze', [PrescriptionController::class, 'analyzeImage'])->middleware('throttle:10,1')->name('api.prescriptions.analyze');
     Route::get('/api/prescriptions-drafts', [PrescriptionController::class, 'getDraftsForPos'])->name('api.prescriptions.drafts');
     Route::get('/api/prescriptions/{number}', [PrescriptionController::class, 'getForPos'])->name('api.prescriptions.get');
+    Route::get('/prescriptions/{prescription}/attachment', [PrescriptionController::class, 'attachment'])->name('prescriptions.attachment');
     Route::post('/prescriptions/bulk-destroy', [PrescriptionController::class, 'bulkDestroy'])->name('prescriptions.bulk-destroy');
     Route::post('/prescriptions/bulk-restore', [PrescriptionController::class, 'bulkRestore'])->name('prescriptions.bulk-restore');
     Route::post('/prescriptions/bulk-force-delete', [PrescriptionController::class, 'bulkForceDelete'])->name('prescriptions.bulk-force-delete');
@@ -97,6 +98,7 @@ Route::middleware(['auth', 'verified', 'role:superadmin,apoteker'])->group(funct
 
     Route::get('/product-batches', [PurchaseController::class, 'batchesIndex'])->name('batches.index');
 
+    Route::get('/api/stock-adjustments/medicines', [App\Http\Controllers\StockAdjustmentController::class, 'searchMedicines'])->name('api.stock-adjustments.medicines');
     Route::post('/stock-adjustments/bulk-destroy', [App\Http\Controllers\StockAdjustmentController::class, 'bulkDestroy'])->name('stock-adjustments.bulk-destroy');
     Route::post('/stock-adjustments/bulk-restore', [App\Http\Controllers\StockAdjustmentController::class, 'bulkRestore'])->name('stock-adjustments.bulk-restore');
     Route::post('/stock-adjustments/bulk-force-delete', [App\Http\Controllers\StockAdjustmentController::class, 'bulkForceDelete'])->name('stock-adjustments.bulk-force-delete');

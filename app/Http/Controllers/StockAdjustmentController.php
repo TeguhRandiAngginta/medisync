@@ -31,15 +31,41 @@ class StockAdjustmentController extends Controller
         ]);
     }
 
+    private const MEDICINE_SEARCH_LIMIT = 20;
+
     public function create()
     {
-        $medicines = Medicine::with(['batches' => function ($q) {
-            $q->orderBy('expired_date', 'asc');
-        }])->get();
-
+        // Hanya daftar awal; pencarian selanjutnya lewat searchMedicines() agar katalog besar tidak dimuat sekaligus.
         return Inertia::render('StockOpname/Create', [
-            'medicines' => $medicines
+            'medicines' => $this->medicineOptions(''),
         ]);
+    }
+
+    /** Pencarian obat (nama, SKU, zat aktif) beserta batch-nya untuk combobox form opname. */
+    public function searchMedicines(Request $request)
+    {
+        $request->validate(['q' => 'nullable|string|max:100']);
+
+        return response()->json($this->medicineOptions(trim((string) $request->query('q', ''))));
+    }
+
+    private function medicineOptions(string $term)
+    {
+        // Karakter escape '!' (bukan backslash: PDO pgsql salah mengurai '\' di dalam SQL).
+        $like = '%' . mb_strtolower(str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $term)) . '%';
+
+        return Medicine::with(['batches' => fn ($q) => $q->orderBy('expired_date', 'asc')])
+            ->when($term !== '', function ($q) use ($like) {
+                $q->where(function ($w) use ($like) {
+                    foreach (['name', 'sku', 'generic_name'] as $column) {
+                        // LOWER + LIKE ... ESCAPE: portabel (PostgreSQL dan SQLite), % dan _ dari input tidak jadi wildcard
+                        $w->orWhereRaw("LOWER({$column}) LIKE ? ESCAPE '!'", [$like]);
+                    }
+                });
+            })
+            ->orderBy('name')
+            ->limit(self::MEDICINE_SEARCH_LIMIT)
+            ->get();
     }
 
     public function store(Request $request)
@@ -241,41 +267,49 @@ class StockAdjustmentController extends Controller
     }
 
     /**
-     * Helper: Rollback adjustment difference from batch
-     * difference = actual - system
-     * to rollback: subtract difference (or system - actual)
+     * Batalkan efek opname: stok batch dikurangi/ditambah kebalikan dari selisih (difference = actual - system).
+     * Dibatalkan bila hasilnya akan negatif atau batch tidak tersedia, bukan dipaksa ke 0 (selisih hilang diam-diam).
      */
     private function rollbackAdjustmentStock(StockAdjustment $adjustment): void
     {
-        if ($adjustment->product_batch_id) {
-            $batch = ProductBatch::where('id', $adjustment->product_batch_id)->lockForUpdate()->first();
-            if ($batch) {
-                // actual = system + difference
-                // to restore back to system: new_stock = batch.stock - difference
-                $newStock = max(0, $batch->stock_quantity - $adjustment->difference);
-                $batch->update(['stock_quantity' => $newStock]);
-                InventoryService::syncMedicineStock($batch->medicine_id);
-            }
-        } elseif ($adjustment->medicine_id) {
-            InventoryService::syncMedicineStock($adjustment->medicine_id);
-        }
+        $this->applyAdjustmentDelta($adjustment, -$adjustment->difference, 'dibatalkan');
+    }
+
+    /** Terapkan ulang efek opname saat dipulihkan dari trash. */
+    private function reapplyAdjustmentStock(StockAdjustment $adjustment): void
+    {
+        $this->applyAdjustmentDelta($adjustment, $adjustment->difference, 'dipulihkan');
     }
 
     /**
-     * Helper: Re-apply adjustment difference to batch
+     * @throws \Exception bila stok batch sudah berubah sehingga operasi akan menghasilkan stok negatif,
+     *                    atau batch sudah tidak ada (mis. faktur pembeliannya ada di trash).
      */
-    private function reapplyAdjustmentStock(StockAdjustment $adjustment): void
+    private function applyAdjustmentDelta(StockAdjustment $adjustment, int $delta, string $verb): void
     {
-        if ($adjustment->product_batch_id) {
-            $batch = ProductBatch::where('id', $adjustment->product_batch_id)->lockForUpdate()->first();
-            if ($batch) {
-                // re-apply difference
-                $newStock = max(0, $batch->stock_quantity + $adjustment->difference);
-                $batch->update(['stock_quantity' => $newStock]);
-                InventoryService::syncMedicineStock($batch->medicine_id);
+        if (!$adjustment->product_batch_id) {
+            if ($adjustment->medicine_id) {
+                InventoryService::syncMedicineStock($adjustment->medicine_id);
             }
-        } elseif ($adjustment->medicine_id) {
-            InventoryService::syncMedicineStock($adjustment->medicine_id);
+            return;
         }
+
+        $batch = ProductBatch::where('id', $adjustment->product_batch_id)->lockForUpdate()->first();
+
+        if (!$batch) {
+            throw new \Exception("Opname #{$adjustment->id} tidak dapat {$verb}: batch terkait sudah dihapus (periksa faktur pembelian di trash).");
+        }
+
+        $newStock = $batch->stock_quantity + $delta;
+
+        if ($newStock < 0) {
+            throw new \Exception(
+                "Opname #{$adjustment->id} tidak dapat {$verb}: stok batch '{$batch->batch_number}' saat ini {$batch->stock_quantity}, "
+                . "operasi ini akan membuat stok menjadi {$newStock}. Stok sudah berubah sejak opname dicatat."
+            );
+        }
+
+        $batch->update(['stock_quantity' => $newStock]);
+        InventoryService::syncMedicineStock($batch->medicine_id);
     }
 }

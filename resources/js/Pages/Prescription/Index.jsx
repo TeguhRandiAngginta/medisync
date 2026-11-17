@@ -1,6 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import Pagination from '@/Components/Pagination';
+import { useState, useEffect } from 'react';
 
 const EditIcon = () => (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -26,8 +27,12 @@ const WarningIcon = () => (
     </svg>
 );
 
-export default function Index({ prescriptions = [], trashed = false, trashedCount = 0 }) {
+export default function Index({ prescriptions: prescriptionsPage = { data: [] }, trashed = false, trashedCount = 0 }) {
+    const prescriptions = prescriptionsPage?.data ?? [];
     const [selectedIds, setSelectedIds] = useState([]);
+
+    // Pilihan hanya berlaku untuk halaman yang tampil: kosongkan saat pindah halaman/tab.
+    useEffect(() => { setSelectedIds([]); }, [prescriptionsPage?.current_page, trashed]);
     const [selectedPrint, setSelectedPrint] = useState(null);
     const [selectedEtiket, setSelectedEtiket] = useState(null);
     const [confirmDelete, setConfirmDelete] = useState(null);
@@ -347,7 +352,7 @@ export default function Index({ prescriptions = [], trashed = false, trashedCoun
                                         <div className="font-mono font-bold text-gray-800 dark:text-gray-200">{resep.prescription_number}</div>
                                         {resep.attachment && (
                                             <a
-                                                href={`/storage/${resep.attachment}`}
+                                                href={`/prescriptions/${resep.id}/attachment`}
                                                 target="_blank"
                                                 rel="noreferrer"
                                                 className="text-[10px] text-blue-500 flex items-center gap-1 mt-1 hover:underline"
@@ -466,6 +471,8 @@ export default function Index({ prescriptions = [], trashed = false, trashedCoun
                     </tbody>
                 </table>
             </div>
+
+            <Pagination links={prescriptionsPage?.links} meta={prescriptionsPage} />
 
             {/* MODAL: Konfirmasi Soft Delete */}
             {confirmDelete && (

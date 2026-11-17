@@ -34,7 +34,7 @@
     <table>
         @foreach($sale->details as $item)
         <tr>
-            <td colspan="2" class="bold">{{ $item->medicine->name }}</td>
+            <td colspan="2" class="bold">{{ $item->medicine->name ?? '-' }}</td>
         </tr>
         <tr>
             <td>{{ $item->quantity }} x {{ number_format($item->selling_price, 0, ',', '.') }}</td>

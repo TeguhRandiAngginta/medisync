@@ -131,8 +131,12 @@ class PosController extends Controller
             'cart.*.quantity' => 'required|integer|min:1',
             'cart.*.medicine_id' => 'nullable|integer',
             'cart.*.id' => 'nullable|integer',
-            'paid_amount' => 'required|numeric|min:0',
-            'payment_method' => 'required|string',
+            'paid_amount' => 'required_without:payments|nullable|numeric|min:0',
+            'payments' => 'nullable|array',
+            'payments.cash' => 'nullable|numeric|min:0',
+            'payments.qris' => 'nullable|numeric|min:0',
+            'payments.transfer' => 'nullable|numeric|min:0',
+            'payment_method' => 'required_without:payments|nullable|string',
             'prescription_id' => 'nullable|exists:prescriptions,id',
         ]);
 
@@ -173,10 +177,45 @@ class PosController extends Controller
             $invoiceNumber = 'TRX-' . date('YmdHis') . '-' . random_int(1000, 9999);
             $totalAmount = $cartItems->sum(fn ($i) => $i['quantity'] * (float) $medicines[$i['resolved_id']]->selling_price);
 
-            if (round((float) $request->paid_amount, 2) < round($totalAmount, 2)) {
+            // Rincian pembayaran terstruktur (klien baru). Tanpa `payments` (klien lama) hanya
+            // paid_amount + payment_method yang dipakai dan rincian dibiarkan NULL (transaksi lama).
+            $breakdown = null;
+            $paymentMethod = $request->payment_method;
+
+            if (is_array($request->input('payments'))) {
+                $methods = [
+                    'Cash'     => round((float) $request->input('payments.cash', 0), 2),
+                    'QRIS'     => round((float) $request->input('payments.qris', 0), 2),
+                    'Transfer' => round((float) $request->input('payments.transfer', 0), 2),
+                ];
+                $paidAmount = round(array_sum($methods), 2);
+            } else {
+                $paidAmount = round((float) $request->paid_amount, 2);
+            }
+
+            if ($paidAmount < round($totalAmount, 2)) {
                 throw new \Exception('Pembayaran kurang dari total belanja.');
             }
-            $changeAmount = round((float) $request->paid_amount - $totalAmount, 2);
+            $changeAmount = round($paidAmount - $totalAmount, 2);
+
+            if (isset($methods)) {
+                // Kembalian hanya bisa diberikan dari uang tunai yang diterima.
+                if ($changeAmount > $methods['Cash']) {
+                    throw new \Exception('Kembalian melebihi uang tunai yang diterima. Pembayaran non-tunai tidak boleh melebihi total belanja.');
+                }
+
+                $breakdown = [
+                    'cash_amount'     => round($methods['Cash'] - $changeAmount, 2), // tunai bersih di laci
+                    'qris_amount'     => $methods['QRIS'],
+                    'transfer_amount' => $methods['Transfer'],
+                ];
+
+                $used = array_filter($methods, fn ($amount) => $amount > 0);
+                $fmt = fn ($n) => rtrim(rtrim(number_format($n, 2, '.', ''), '0'), '.');
+                $paymentMethod = count($used) > 1
+                    ? implode(' + ', array_map(fn ($name, $amount) => "{$name}: " . $fmt($amount), array_keys($used), $used))
+                    : (array_key_first($used) ?? 'Cash');
+            }
 
             $activeShift = \App\Models\CashRegister::where('user_id', auth()->id())->where('status', 'open')->first();
             if (!$activeShift) {
@@ -189,9 +228,10 @@ class PosController extends Controller
                 'cash_register_id' => $activeShift->id,
                 'total_amount' => $totalAmount,
                 'subtotal_amount'  => $totalAmount,
-                'paid_amount'    => $request->paid_amount,
+                'paid_amount'    => $paidAmount,
                 'change_amount' => $changeAmount,
-                'payment_method' => $request->payment_method,
+                'payment_method' => $paymentMethod,
+                ...($breakdown ?? []),
                 'sale_date' => now(),
             ]);
 
@@ -227,5 +267,22 @@ class PosController extends Controller
             DB::rollBack();
             return back()->withErrors(['message' => 'Gagal memproses transaksi: ' . $e->getMessage()]);
         }
+    }
+
+    /**
+     * Struk 58mm yang langsung membuka dialog cetak (lihat onload di view).
+     * Superadmin/owner boleh mencetak ulang semua struk; kasir dan apoteker hanya miliknya sendiri
+     * (struk milik orang lain dijawab 404 agar keberadaannya tidak terungkap).
+     */
+    public function printReceipt(string $invoice)
+    {
+        $isOwner = in_array(auth()->user()->role->slug ?? '', ['superadmin', 'owner']);
+
+        $sale = Sale::with(['user', 'details.medicine' => fn ($q) => $q->withTrashed()])
+            ->where('invoice_number', $invoice)
+            ->when(!$isOwner, fn ($q) => $q->where('user_id', auth()->id()))
+            ->firstOrFail();
+
+        return view('pos.receipt-pdf', compact('sale'));
     }
 }

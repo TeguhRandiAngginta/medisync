@@ -172,6 +172,11 @@ export default function Index({ medicines, activeShift }) {
             paid_amount: totalPaid,
             change_amount: changeAmount >= 0 ? changeAmount : 0,
             payment_method: currentMethod,
+            payments: {
+                cash: payments.cash || 0,
+                qris: payments.qris || 0,
+                transfer: payments.transfer || 0,
+            },
             prescription_id: activePrescriptionId,
         }, {
             onSuccess: (page) => {

@@ -1,7 +1,8 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import PrimaryButton from '@/Components/PrimaryButton';
-import { useState } from 'react';
+import Pagination from '@/Components/Pagination';
+import { useState, useEffect } from 'react';
 
 const EditIcon = () => (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -21,13 +22,18 @@ const RestoreIcon = () => (
     </svg>
 );
 
-export default function Index({ products = [], showTrashed = false, trashedCount = 0 }) {
+export default function Index({ products: productsPage = { data: [] }, showTrashed = false, trashedCount = 0 }) {
+    const products = productsPage?.data ?? [];
     const [selectedIds, setSelectedIds]                 = useState([]);
     const [confirmDelete, setConfirmDelete]             = useState(null);       // product object to soft delete
     const [confirmForceDelete, setConfirmForceDelete]   = useState(null);       // product object to force delete
     const [confirmBulkDelete, setConfirmBulkDelete]     = useState(false);
     const [confirmBulkRestore, setConfirmBulkRestore]   = useState(false);
     const [confirmBulkForceDelete, setConfirmBulkForceDelete] = useState(false);
+
+    // Pilihan hanya berlaku untuk halaman yang sedang tampil: kosongkan saat pindah halaman/tab
+    // agar aksi massal tidak mengenai data yang tidak terlihat.
+    useEffect(() => { setSelectedIds([]); }, [productsPage?.current_page, showTrashed]);
 
     const switchTab = (toTrash) => {
         setSelectedIds([]);
@@ -334,6 +340,8 @@ export default function Index({ products = [], showTrashed = false, trashedCount
                     </tbody>
                 </table>
             </div>
+
+            <Pagination links={productsPage?.links} meta={productsPage} />
 
             {/* MODAL: Konfirmasi Soft Delete */}
             {confirmDelete && (

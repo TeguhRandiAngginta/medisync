@@ -15,7 +15,9 @@ class AuditLogController extends Controller
     $logs = \App\Models\AuditLog::with(['user.role'])
         ->where('module', $currentTab)
         ->latest()
-        ->get();
+        ->orderByDesc('id')
+        ->paginate(25)
+        ->withQueryString();
 
     return Inertia::render('AuditLogs/Index', [
         'logs' => $logs,

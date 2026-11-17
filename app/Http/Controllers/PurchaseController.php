@@ -30,12 +30,14 @@ class PurchaseController extends Controller
     {
         $trashed = $request->boolean('trashed', false);
 
-        $purchases = Purchase::with(['supplier', 'user', 'details.medicine' => function($q) {
+        $purchases = Purchase::with(['supplier' => fn ($q) => $q->withTrashed(), 'user', 'details.medicine' => function($q) {
             $q->withTrashed();
         }])
         ->when($trashed, fn($q) => $q->onlyTrashed(), fn($q) => $q->withoutTrashed())
         ->latest($trashed ? 'deleted_at' : 'created_at')
-        ->get();
+        ->orderByDesc('id')
+        ->paginate(25)
+        ->withQueryString();
 
         $trashedCount = Purchase::onlyTrashed()->count();
 
@@ -91,7 +93,7 @@ class PurchaseController extends Controller
                 'purchase_date' => $validated['purchase_date'],
                 'total_amount' => $totalAmount,
                 'status' => 'completed',
-                'notes' => $validated['notes'],
+                'notes' => $validated['notes'] ?? null,
             ]);
 
             foreach ($request->items as $item) {
@@ -418,7 +420,7 @@ class PurchaseController extends Controller
 
     public function printPdf(Purchase $purchase)
     {
-        $purchase->load(['supplier', 'user', 'details.medicine']);
+        $purchase->load(['supplier' => fn ($q) => $q->withTrashed(), 'user', 'details.medicine']);
         $pdf = Pdf::loadView('pdf.purchase-receipt', compact('purchase'));
         $pdf->setPaper('a4', 'portrait');
 
@@ -430,9 +432,11 @@ class PurchaseController extends Controller
     public function trash()
     {
         $trashedPurchases = Purchase::onlyTrashed()
-            ->with(['supplier', 'user'])
+            ->with(['supplier' => fn ($q) => $q->withTrashed(), 'user'])
             ->latest()
-            ->get();
+            ->orderByDesc('id')
+            ->paginate(25)
+            ->withQueryString();
 
         return Inertia::render('Purchases/Trash', [
             'purchases' => $trashedPurchases

@@ -14,6 +14,8 @@
                     <th><b>Waktu</b></th><th><b>No. Invoice</b></th><th><b>Omzet</b></th><th><b>HPP</b></th><th><b>Laba Bersih</b></th>
                 @elseif($type === 'stock')
                     <th><b>SKU / Kode</b></th><th><b>Nama Obat</b></th><th><b>Kategori</b></th><th><b>Stok Tersisa</b></th><th><b>Batas Minimum</b></th>
+                @elseif($type === 'mutations')
+                    <th><b>Waktu</b></th><th><b>Obat (SKU)</b></th><th><b>Tipe</b></th><th><b>Jumlah</b></th><th><b>Referensi</b></th><th><b>Keterangan</b></th><th><b>Saldo Sebelum</b></th><th><b>Saldo Sesudah</b></th>
                 @endif
             </tr>
         </thead>
@@ -25,13 +27,12 @@
                     @elseif($type === 'purchase')
                         <td>{{ $item->purchase_date }}</td><td>{{ $item->invoice_number }}</td><td>{{ $item->supplier->name ?? '-' }}</td><td>{{ $item->user->name ?? '-' }}</td><td>{{ $item->total_amount }}</td>
                     @elseif($type === 'profit')
-                        @php
-                            $hpp = 0;
-                            foreach($item->details as $detail) { $hpp += ($detail->quantity * ($detail->medicine->selling_price * 0.7)); }
-                        @endphp
+                        @php $hpp = (float) ($item->hpp ?? 0); @endphp
                         <td>{{ $item->sale_date }}</td><td>{{ $item->invoice_number }}</td><td>{{ $item->total_amount }}</td><td>{{ $hpp }}</td><td>{{ $item->total_amount - $hpp }}</td>
                     @elseif($type === 'stock')
-                        <td>{{ $item->sku }}</td><td>{{ $item->name }}</td><td>{{ $item->category->name ?? '-' }}</td><td>{{ $item->current_stock }}</td><td>{{ $item->min_stock }}</td>
+                        <td>{{ $item->sku }}</td><td>{{ $item->name }}</td><td>{{ $item->category->name ?? '-' }}</td><td>{{ $item->stock }}</td><td>{{ $item->min_stock }}</td>
+                    @elseif($type === 'mutations')
+                        <td>{{ $item['date'] }}</td><td>{{ $item['medicine_name'] }} ({{ $item['sku'] }})</td><td>{{ $item['type'] }}</td><td>{{ $item['type'] === 'IN' ? '+' : '-' }}{{ $item['quantity'] }}</td><td>{{ $item['reference'] }}</td><td>{{ $item['description'] }}</td><td>{{ $item['balance_before'] }}</td><td>{{ $item['balance'] }}</td>
                     @endif
                 </tr>
             @empty
@@ -99,6 +100,8 @@
                         <th>Waktu</th><th>No. Invoice</th><th class="text-right">Omzet</th><th class="text-right">HPP</th><th class="text-right">Laba Bersih</th>
                     @elseif($type === 'stock')
                         <th>SKU / Kode</th><th>Nama Obat</th><th>Kategori</th><th class="text-center">Stok Tersisa</th><th class="text-center">Batas Minimum</th>
+                    @elseif($type === 'mutations')
+                        <th>Waktu</th><th>Obat (SKU)</th><th class="text-center">Tipe</th><th class="text-center">Jumlah</th><th>Referensi</th><th>Keterangan</th><th class="text-center">Saldo</th>
                     @endif
                 </tr>
             </thead>
@@ -111,13 +114,14 @@
                             <td>{{ $item->purchase_date }}</td><td class="font-bold">{{ $item->invoice_number }}</td><td>{{ $item->supplier->name ?? '-' }}</td><td>{{ $item->user->name ?? '-' }}</td><td class="text-right font-bold">Rp {{ number_format($item->total_amount, 0, ',', '.') }}</td>
                         @elseif($type === 'profit')
                             @php
-                                $hpp = 0;
-                                foreach($item->details as $detail) { $hpp += ($detail->quantity * ($detail->medicine->selling_price * 0.7)); }
+                                $hpp = (float) ($item->hpp ?? 0);
                                 $laba = $item->total_amount - $hpp;
                             @endphp
                             <td>{{ $item->sale_date }}</td><td class="font-bold">{{ $item->invoice_number }}</td><td class="text-right">Rp {{ number_format($item->total_amount, 0, ',', '.') }}</td><td class="text-right">Rp {{ number_format($hpp, 0, ',', '.') }}</td><td class="text-right font-bold">Rp {{ number_format($laba, 0, ',', '.') }}</td>
                         @elseif($type === 'stock')
-                            <td class="font-bold">{{ $item->sku }}</td><td>{{ $item->name }}</td><td>{{ $item->category->name ?? '-' }}</td><td class="text-center font-bold text-red">{{ $item->current_stock ?? 0 }} {{ $item->base_unit }}</td><td class="text-center">{{ $item->min_stock }} {{ $item->base_unit }}</td>
+                            <td class="font-bold">{{ $item->sku }}</td><td>{{ $item->name }}</td><td>{{ $item->category->name ?? '-' }}</td><td class="text-center font-bold text-red">{{ $item->stock ?? 0 }} {{ $item->base_unit }}</td><td class="text-center">{{ $item->min_stock }} {{ $item->base_unit }}</td>
+                        @elseif($type === 'mutations')
+                            <td>{{ \Carbon\Carbon::parse($item['date'])->format('d M Y H:i') }}</td><td>{{ $item['medicine_name'] }}<br><small>{{ $item['sku'] }}</small></td><td class="text-center">{{ $item['type'] }}</td><td class="text-center font-bold">{{ $item['type'] === 'IN' ? '+' : '-' }}{{ $item['quantity'] }}</td><td>{{ $item['reference'] }}</td><td>{{ $item['description'] }}</td><td class="text-center font-bold">{{ $item['balance'] }}</td>
                         @endif
                     </tr>
                 @empty

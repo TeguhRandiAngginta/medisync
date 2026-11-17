@@ -317,4 +317,99 @@ class BugfixRegressionTest extends TestCase
             'supplier_type_id' => $type->id, 'code' => 'spl-001', 'name' => 'Baru 2',
         ])->assertStatus(422);
     }
+
+    private function adjust(ProductBatch $batch, int $actual, string $type = 'CORRECTION'): \App\Models\StockAdjustment
+    {
+        $this->actingAs($this->user);
+        InventoryService::adjustBatchStock($batch->id, $actual, $type, 'test');
+        return \App\Models\StockAdjustment::latest('id')->firstOrFail();
+    }
+
+    public function test_opname_rejects_zero_difference_and_wrong_direction_type(): void
+    {
+        $batch = $this->batch('B1', 10, now()->addYear()->toDateString());
+
+        $this->actingAs($this->user)->post(route('stock-adjustments.store'), [
+            'product_batch_id' => $batch->id, 'actual_stock' => 10, 'type' => 'CORRECTION',
+        ])->assertSessionHasErrors('message');
+
+        $this->actingAs($this->user)->post(route('stock-adjustments.store'), [
+            'product_batch_id' => $batch->id, 'actual_stock' => 15, 'type' => 'DAMAGE',
+        ])->assertSessionHasErrors('message');
+
+        $this->assertSame(0, \App\Models\StockAdjustment::count());
+        $this->assertEquals(10, $batch->fresh()->stock_quantity);
+
+        $this->actingAs($this->user)->post(route('stock-adjustments.store'), [
+            'product_batch_id' => $batch->id, 'actual_stock' => 7, 'type' => 'DAMAGE',
+        ])->assertSessionHasNoErrors();
+        $this->assertEquals(7, $batch->fresh()->stock_quantity);
+    }
+
+    public function test_cancelling_opname_undoes_delta_on_current_stock(): void
+    {
+        $batch = $this->batch('B1', 10, now()->addYear()->toDateString());
+        $adj = $this->adjust($batch, 15);                 // +5 => 15
+        $batch->update(['stock_quantity' => 12]);         // 3 terjual setelah opname
+
+        $this->actingAs($this->user)->delete(route('stock-adjustments.destroy', $adj->id))->assertSessionHasNoErrors();
+
+        $this->assertEquals(7, $batch->fresh()->stock_quantity);   // 10 awal - 3 terjual
+        $this->assertSoftDeleted('stock_adjustments', ['id' => $adj->id]);
+    }
+
+    public function test_cancelling_opname_is_refused_when_it_would_make_stock_negative(): void
+    {
+        $batch = $this->batch('B1', 5, now()->addYear()->toDateString());
+        $adj = $this->adjust($batch, 15);                 // +10 => 15
+        $batch->update(['stock_quantity' => 0]);          // semua terjual
+
+        $this->actingAs($this->user)->delete(route('stock-adjustments.destroy', $adj->id))
+            ->assertSessionHasErrors('message');
+
+        $this->assertEquals(0, $batch->fresh()->stock_quantity);
+        $this->assertNull($adj->fresh()->deleted_at);
+    }
+
+    public function test_restoring_opname_is_refused_when_it_would_make_stock_negative(): void
+    {
+        $batch = $this->batch('B1', 10, now()->addYear()->toDateString());
+        $adj = $this->adjust($batch, 4);                  // -6 => 4
+        $this->actingAs($this->user)->delete(route('stock-adjustments.destroy', $adj->id)); // kembali 10
+        $batch->update(['stock_quantity' => 2]);          // terjual 8
+
+        $this->actingAs($this->user)->post(route('stock-adjustments.restore', $adj->id))
+            ->assertSessionHasErrors('message');
+
+        $this->assertEquals(2, $batch->fresh()->stock_quantity);
+        $this->assertSoftDeleted('stock_adjustments', ['id' => $adj->id]);
+    }
+
+    public function test_cancelling_opname_of_trashed_batch_is_refused(): void
+    {
+        $batch = $this->batch('B1', 10, now()->addYear()->toDateString());
+        $adj = $this->adjust($batch, 15);
+        $batch->delete();
+
+        $this->actingAs($this->user)->delete(route('stock-adjustments.destroy', $adj->id))
+            ->assertSessionHasErrors('message');
+
+        $this->assertNull($adj->fresh()->deleted_at);
+    }
+
+    public function test_bulk_cancel_is_all_or_nothing(): void
+    {
+        $b1 = $this->batch('B1', 10, now()->addYear()->toDateString());
+        $b2 = $this->batch('B2', 5, now()->addYear()->toDateString());
+        $a1 = $this->adjust($b1, 15);                     // +5
+        $a2 = $this->adjust($b2, 15);                     // +10
+        $b2->update(['stock_quantity' => 0]);             // a2 tidak bisa dibatalkan
+
+        $this->actingAs($this->user)->post(route('stock-adjustments.bulk-destroy'), ['ids' => [$a1->id, $a2->id]])
+            ->assertSessionHasErrors('message');
+
+        $this->assertEquals(15, $b1->fresh()->stock_quantity, 'Pembatalan a1 harus ikut digulung.');
+        $this->assertNull($a1->fresh()->deleted_at);
+        $this->assertNull($a2->fresh()->deleted_at);
+    }
 }
