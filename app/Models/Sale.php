@@ -14,7 +14,7 @@ class Sale extends Model
     protected $fillable = [
         'invoice_number', 'user_id', 'cash_register_id', 'total_amount', 'subtotal_amount',
         'discount_amount', 'paid_amount', 'change_amount', 'payment_method',
-        'customer_name', 'sale_date', 'status'
+        'customer_name', 'sale_date', 'status', 'cash_amount', 'qris_amount', 'transfer_amount'
     ];
 
     public function details()

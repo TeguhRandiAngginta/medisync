@@ -16,28 +16,39 @@ class CashRegisterController extends Controller
             'opening_amount' => 'required|numeric|min:0'
         ]);
 
-        $activeShift = CashRegister::where('user_id', auth()->id())
-            ->where('status', 'open')
-            ->first();
+        $alreadyOpen = 'Anda sudah memiliki shift yang aktif.';
 
-        if ($activeShift) {
-            return redirect()->route('pos.index')->withErrors(['message' => 'Anda sudah memiliki shift yang aktif.']);
+        try {
+            $opened = DB::transaction(function () use ($request) {
+                // Kunci baris user agar dua request bersamaan (klik ganda) berjalan berurutan.
+                DB::table('users')->where('id', auth()->id())->lockForUpdate()->first();
+
+                if (CashRegister::where('user_id', auth()->id())->where('status', 'open')->exists()) {
+                    return false;
+                }
+
+                $shift = CashRegister::create([
+                    'user_id' => auth()->id(),
+                    'opened_at' => now(),
+                    'opening_amount' => $request->opening_amount,
+                    'status' => 'open'
+                ]);
+
+                AuditLog::record(
+                    'pos_shift',
+                    'CREATE',
+                    'Membuka shift kasir #' . $shift->id . ' dengan modal awal Rp ' . number_format($request->opening_amount, 0, ',', '.')
+                );
+
+                return true;
+            });
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            $opened = false; // index unik: shift lain terbuka di antara pengecekan dan insert
         }
 
-        DB::transaction(function () use ($request) {
-            $shift = CashRegister::create([
-                'user_id' => auth()->id(),
-                'opened_at' => now(),
-                'opening_amount' => $request->opening_amount,
-                'status' => 'open'
-            ]);
-
-            AuditLog::record(
-                'pos_shift',
-                'CREATE',
-                'Membuka shift kasir #' . $shift->id . ' dengan modal awal Rp ' . number_format($request->opening_amount, 0, ',', '.')
-            );
-        });
+        if (!$opened) {
+            return redirect()->route('pos.index')->withErrors(['message' => $alreadyOpen]);
+        }
 
         return redirect()->route('pos.index')->with('success', 'Shift kasir berhasil dibuka. Selamat bekerja!');
     }
@@ -53,7 +64,11 @@ class CashRegisterController extends Controller
             ->where('status', 'open')
             ->firstOrFail();
 
-        DB::transaction(function () use ($request, $activeShift) {
+        DB::transaction(function () use ($request, &$activeShift) {
+            // Kunci shift agar penutupan ganda (klik ganda) tidak dihitung dua kali.
+            $activeShift = CashRegister::whereKey($activeShift->id)->where('status', 'open')->lockForUpdate()->first();
+            abort_if(!$activeShift, 409, 'Shift ini sudah ditutup.');
+
             $sales = Sale::where('cash_register_id', $activeShift->id)->get();
             
             $systemCash = 0.0;
@@ -61,6 +76,15 @@ class CashRegisterController extends Controller
             $systemTransfer = 0.0;
 
             foreach ($sales as $sale) {
+                // Transaksi baru menyimpan rincian pembayaran terstruktur: pakai langsung.
+                if (!is_null($sale->cash_amount)) {
+                    $systemCash     += (float) $sale->cash_amount;
+                    $systemQris     += (float) $sale->qris_amount;
+                    $systemTransfer += (float) $sale->transfer_amount;
+                    continue;
+                }
+
+                // Transaksi lama: rincian hanya ada di string payment_method.
                 $method = (string) $sale->payment_method;
 
                 if (str_contains($method, '+')) {
@@ -70,7 +94,7 @@ class CashRegisterController extends Controller
                     if (!empty($matches)) {
                         foreach ($matches as $match) {
                             $mType = strtoupper($match[1]);
-                            $mAmount = (float) str_replace(['.', ','], '', $match[2]);
+                            $mAmount = $this->parseAmount($match[2]);
                             
                             if ($mType === 'CASH') {
                                 $systemCash += max(0, $mAmount - (float) $sale->change_amount);
@@ -126,5 +150,20 @@ class CashRegisterController extends Controller
         });
 
         return redirect()->route('dashboard')->with('success', 'Shift kasir berhasil ditutup dan direkonsiliasi.');
+    }
+
+    /**
+     * Ubah teks nominal dari payment_method lama menjadi angka.
+     * "50.000" / "1,250,000" => pemisah ribuan; "12500.5" / "12500,5" => desimal.
+     */
+    private function parseAmount(string $raw): float
+    {
+        $raw = trim($raw);
+
+        if (preg_match('/^\d{1,3}([.,]\d{3})+$/', $raw)) {
+            return (float) preg_replace('/[.,]/', '', $raw);
+        }
+
+        return (float) str_replace(',', '.', $raw);
     }
 }
