@@ -18,9 +18,14 @@ Perubahan di bawah ini dicatat pada branch `ditz`.
 - Stok tidak lagi membengkak saat transaksi dihapus-dipulihkan-dihapus: `recordSaleDetailBatches` kini mengganti (bukan menambah) baris `sale_detail_batches`.
 - Pemulihan transaksi dengan stok tidak cukup kini menampilkan pesan error (sebelumnya exception tidak tertangkap, 500) di `SalesHistoryController::restore` dan `bulkRestore`.
 - POS (`PosController::store`) tidak lagi memercayai data klien: harga diambil dari `medicines.selling_price`, kembalian dihitung di server, pembayaran kurang dari total ditolak, dan obat yang tidak ada/nonaktif ditolak. Nomor invoice memakai `random_int(1000, 9999)` (tabrakan di detik yang sama masih mungkin, tetapi kolom unik sehingga transaksi gagal, bukan duplikat).
-- Test regresi baru: `tests/Feature/BugfixRegressionTest.php` (5 test; semuanya gagal pada kode lama dan lulus pada kode baru). Seluruh suite: 50 test lulus.
+- Akun nonaktif langsung kehilangan akses: middleware baru `EnsureUserIsActive` (didaftarkan di grup `web`) melogout sesi atau cookie remember-me yang sudah terbuka.
+- `ProfileController::destroy` menolak hapus akun sendiri bila akun punya riwayat penjualan, pembelian, atau shift (sama seperti `UserController::destroy`), dan tidak lagi logout lebih dulu.
+- Item resep lama hasil edit tidak hidup lagi saat resep dipulihkan dari trash: `PrescriptionController::update` memakai `forceDelete` untuk item yang diganti.
+- Kunci API Gemini tidak lagi bocor lewat pesan error: `GoogleAIService` menyamarkan key (`[REDACTED]`) di pesan exception dan log. Model dari `GEMINI_MODEL` kini dicoba lebih dulu.
+- Struk POS tidak lagi `INV-SUCCESS`: `HandleInertiaRequests` membagikan `flash.invoice_number` ke UI.
+- Test regresi baru: `tests/Feature/BugfixRegressionTest.php` (10 test; semuanya gagal pada kode lama dan lulus pada kode baru). Seluruh suite: 55 test lulus.
 
-**Catatan data lama:** perbaikan stok membengkak hanya berlaku untuk transaksi yang diproses setelah ini. Transaksi yang sudah pernah dihapus lalu dipulihkan pada kode lama bisa masih punya baris ganda di `sale_detail_batches`, sehingga menghapusnya lagi tetap mengembalikan stok dua kali. Cek dengan: `SELECT sale_detail_id FROM sale_detail_batches b JOIN sale_details d ON d.id = b.sale_detail_id GROUP BY sale_detail_id, d.quantity HAVING SUM(b.quantity) > d.quantity;`. Migrasi pembersih belum dibuat.
+**Catatan data lama:** item resep versi lama yang sudah terlanjur berstatus soft-deleted di database bisa tetap muncul saat resep dipulihkan; perbaikan hanya berlaku untuk edit berikutnya. Juga, perbaikan stok membengkak hanya berlaku untuk transaksi yang diproses setelah ini. Transaksi yang sudah pernah dihapus lalu dipulihkan pada kode lama bisa masih punya baris ganda di `sale_detail_batches`, sehingga menghapusnya lagi tetap mengembalikan stok dua kali. Cek dengan: `SELECT sale_detail_id FROM sale_detail_batches b JOIN sale_details d ON d.id = b.sale_detail_id GROUP BY sale_detail_id, d.quantity HAVING SUM(b.quantity) > d.quantity;`. Migrasi pembersih belum dibuat.
 
 ### Cara menjalankan (Docker)
 1. `cp .env.docker.example .env`, lalu isi `DB_PASSWORD` dan `GEMINI_API_KEY`.
@@ -34,21 +39,16 @@ Cakupan: controller dan service domain sudah dibaca (`Pos`, `CashRegister`, `Pur
 `ReferenceController` hanya dibaca ±200 dari 584 baris (struktur tiap blok sama, guard hapus permanen dicek lewat grep). **Belum dibaca:** seluruh frontend `resources/js`, controller auth bawaan Breeze (`routes/auth.php` hanya dilihat, kecuali `RegisteredUser`), `ReportExport`, dan view Blade. `HandleInertiaRequests` sudah dibaca: key flash `success` dan `error` dibagikan ke UI. Semua temuan di sini murni dari membaca kode, belum ada yang direproduksi lewat uji jalan.
 
 **Tinggi**
-- **[V]** `ProfileController::destroy` memungkinkan user menghapus akunnya sendiri, melewati proteksi riwayat di `UserController::destroy`. User tanpa SoftDeletes dan punya transaksi kena error FK setelah logout.
-- **[V]** `PrescriptionController::update` menghapus item secara soft delete, lalu `restore`/`bulkRestore` memulihkan semua item terhapus milik resep itu, termasuk versi lama hasil edit. Item resep jadi dobel atau usang.
 - **[V]** Pencocokan obat di `analyzeImage` memakai `ilike '%nama%'->first()` tanpa urutan. Obat dengan dosis berbeda bisa tertukar dan dimasukkan ke resep.
 
 **Sedang**
-- **[V]** Akun nonaktif tetap memakai sesi atau cookie remember-me yang sudah ada (`is_active` hanya dicek saat login).
-- **[?]** Kunci API Gemini ada di query string URL. `scanInvoice` dan `analyzeImage` mengembalikan `$e->getMessage()` ke klien, yang bisa memuat URL lengkap.
-- **[V]** `GoogleAIService`: daftar model di-hardcode dan dicoba berurutan, tiap kegagalan menghabiskan timeout 25 dtk (hingga ±125 dtk). Config `GEMINI_MODEL` tidak dipakai.
+- **[V]** `GoogleAIService`: daftar model fallback di-hardcode dan dicoba berurutan, tiap kegagalan menghabiskan timeout 25 dtk (hingga ±125 dtk).
 - **[?]** Nama model `gemini-3.8-flash` dan `gemini-1.5-*` perlu dicocokkan dengan daftar model Gemini yang berlaku.
 - **[V]** Lampiran resep disimpan di disk `public` dan dilayani tanpa login. Nama file acak (tidak bisa ditebak), tetapi URL yang bocor tidak bisa dicabut, dan file tidak dihapus saat resep dihapus permanen. Data medis pasien.
 - **[V]** Rute resep (hapus, restore, hapus permanen, ubah) bisa diakses kasir karena hanya dibatasi `role:superadmin,apoteker,kasir` tanpa pengecekan di controller. `destroy` juga boleh menghapus resep berstatus DISPENSED.
 - **[V]** `StockAdjustmentController`: membatalkan atau memulihkan opname mengurangi atau menambah `difference` pada stok saat ini dengan `max(0, ...)`. Kalau stok sudah berubah setelah opname, hasilnya salah dan selisih hilang diam-diam.
 - **[V]** `type` opname (`DAMAGE`, `EXPIRED`, `LOST`) tidak divalidasi terhadap tanda selisih, sehingga "rusak" bisa menambah stok. Selisih 0 tetap dicatat.
 - **[V]** Nomor resep `RSP-Ymd-mt_rand(1,999)` di `PrescriptionController::store` rawan bentrok. Kolom `prescription_number` unik, jadi bentrok menghasilkan pesan gagal simpan.
-- **[V]** `PosController::store` mem-flash `invoice_number`, tetapi `HandleInertiaRequests::share()` hanya membagikan `success` dan `error`. Akibatnya `page.props.flash?.invoice_number` di `Pos/Index.jsx` selalu kosong dan struk menampilkan `INV-SUCCESS`, sehingga rute `/pos/receipt/{invoice}` tidak bisa dipakai dari struk.
 - **[?]** `smartSearch`: bila AI mengembalikan objek bersarang, `$keywords` berisi array dan query menjadi `ilike '%Array%'`.
 - **[?]** `openShift` tidak punya kunci atau unique constraint, klik ganda cepat bisa membuat dua shift terbuka.
 - **[V]** `PurchaseController::store` mewajibkan `expired_date >= 6 bulan ke depan`, sehingga barang dengan sisa umur lebih pendek tidak bisa dicatat.

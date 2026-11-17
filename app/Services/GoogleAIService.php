@@ -15,13 +15,16 @@ class GoogleAIService
             throw new \Exception('GEMINI_API_KEY belum dikonfigurasi pada file .env');
         }
 
-        $fallbackModels = $model ? [trim($model)] : [
+        $configured = trim((string) config('services.google_ai.default_model'));
+
+        $fallbackModels = $model ? [trim($model)] : array_values(array_unique(array_filter([
+            $configured,
             'gemini-1.5-flash',
             'gemini-1.5-pro', 
             'gemini-2.0-flash' ,
             'gemini-2.5-flash',
             'gemini-3.8-flash'
-        ];
+        ])));
 
         $parts = [];
         if (!empty($base64Image) && !empty($mimeType)) {
@@ -70,15 +73,26 @@ class GoogleAIService
                 }
 
                 Log::warning("Model [{$cleanModel}] merespons status {$response->status()}. Berpindah...");
-                $lastException = new \Exception("Model {$cleanModel} error: " . $response->body());
+                $lastException = new \Exception("Model {$cleanModel} error: " . self::sanitize($response->body(), $apiKey));
 
             } catch (\Exception $e) {
-                Log::warning("Koneksi ke model [{$cleanModel}] gagal: " . $e->getMessage());
-                $lastException = $e;
+                $safeMessage = self::sanitize($e->getMessage(), $apiKey);
+                Log::warning("Koneksi ke model [{$cleanModel}] gagal: " . $safeMessage);
+                $lastException = new \Exception($safeMessage);
             }
         }
 
         throw new \Exception("Semua model Gemini gagal merespons. Error: " . ($lastException ? $lastException->getMessage() : 'Unknown error'));
+    }
+
+    /** Hapus API key dari teks error (URL Guzzle memuat ?key=...). */
+    private static function sanitize(string $text, string $apiKey): string
+    {
+        if ($apiKey !== '') {
+            $text = str_replace($apiKey, '[REDACTED]', $text);
+        }
+
+        return preg_replace('/([?&]key=)[^&\s"\']+/i', '$1[REDACTED]', $text);
     }
 
     public static function analyzePrescriptionImage(string $base64Image, string $mimeType, string $prompt): array

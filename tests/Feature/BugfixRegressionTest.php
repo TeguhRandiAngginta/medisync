@@ -170,4 +170,83 @@ class BugfixRegressionTest extends TestCase
         $this->assertSame(0, Sale::count());
         $this->assertEquals(10, $batch->fresh()->stock_quantity);
     }
+
+    public function test_deactivated_user_loses_existing_session(): void
+    {
+        $this->actingAs($this->user)->get(route('dashboard'))->assertOk();
+
+        $this->user->update(['is_active' => false]);
+
+        $this->get(route('dashboard'))->assertRedirect(route('login'));
+        $this->assertGuest();
+    }
+
+    public function test_user_with_history_cannot_delete_own_account(): void
+    {
+        Sale::create([
+            'invoice_number' => 'INV-Z', 'user_id' => $this->user->id, 'total_amount' => 1,
+            'subtotal_amount' => 1, 'paid_amount' => 1, 'change_amount' => 0,
+            'payment_method' => 'Cash', 'sale_date' => now(),
+        ]);
+
+        $this->actingAs($this->user)
+            ->delete('/profile', ['password' => 'password'])
+            ->assertSessionHasErrors('password');
+
+        $this->assertNotNull(User::find($this->user->id));
+        $this->assertAuthenticated();
+    }
+
+    public function test_prescription_edit_then_trash_restore_has_no_ghost_items(): void
+    {
+        $p = \App\Models\Prescription::create([
+            'prescription_number' => 'RSP-T-001', 'patient_name' => 'A', 'doctor_name' => 'B',
+            'prescription_date' => now()->toDateString(), 'status' => 'DRAFT', 'user_id' => $this->user->id,
+        ]);
+        \App\Models\PrescriptionItem::create(['prescription_id' => $p->id, 'medicine_id' => $this->medicine->id, 'quantity' => 1, 'signa' => '1x1']);
+
+        $this->actingAs($this->user)->put(route('prescriptions.update', $p->id), [
+            'patient_name' => 'A', 'doctor_name' => 'B', 'prescription_date' => now()->toDateString(),
+            'items' => [['medicine_id' => $this->medicine->id, 'quantity' => 5, 'signa' => '3x1']],
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($this->user)->delete(route('prescriptions.destroy', $p->id));
+        $this->actingAs($this->user)->post(route('prescriptions.restore', $p->id));
+
+        $items = \App\Models\PrescriptionItem::where('prescription_id', $p->id)->get();
+        $this->assertCount(1, $items);
+        $this->assertEquals(5, $items->first()->quantity);
+    }
+
+    public function test_gemini_error_never_exposes_api_key(): void
+    {
+        config(['services.google_ai.api_key' => 'SECRET-KEY-123']);
+        \Illuminate\Support\Facades\Http::fake(function () {
+            throw new \Illuminate\Http\Client\ConnectionException(
+                'cURL error 28: timeout for https://generativelanguage.googleapis.com/v1beta/models/x:generateContent?key=SECRET-KEY-123'
+            );
+        });
+
+        try {
+            \App\Services\GoogleAIService::generateContent('halo');
+            $this->fail('Harus melempar exception');
+        } catch (\Exception $e) {
+            $this->assertStringNotContainsString('SECRET-KEY-123', $e->getMessage());
+        }
+    }
+
+    public function test_invoice_number_is_shared_to_inertia_flash(): void
+    {
+        $this->openShift();
+        $this->batch('B1', 10, now()->addYear()->toDateString());
+
+        $response = $this->actingAs($this->user)->post(route('pos.store'), [
+            'cart' => [['id' => $this->medicine->id, 'quantity' => 1]],
+            'paid_amount' => 10000, 'payment_method' => 'Cash',
+        ]);
+        $response->assertSessionHas('invoice_number');
+
+        $page = $this->actingAs($this->user)->withSession(['invoice_number' => 'TRX-1'])->get(route('pos.index'));
+        $this->assertSame('TRX-1', $page->viewData('page')['props']['flash']['invoice_number'] ?? null);
+    }
 }
