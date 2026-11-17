@@ -5,7 +5,7 @@ import SalesChart from './SalesChart';
 import TopProductsChart from './TopProductsChart';
 import RecentTransactions from './RecentTransactions';
 
-export default function Index({ auth, stats, chartData, topProducts, paymentDistribution, recentTransactions, currentFilter }) {
+export default function Index({ auth, stats, chartData, topProducts, paymentDistribution, recentTransactions, currentFilter, scope }) {
     
     const handleFilterChange = (period) => {
         router.get(route('dashboard'), { period }, { preserveState: true, preserveScroll: true });
@@ -22,7 +22,11 @@ export default function Index({ auth, stats, chartData, topProducts, paymentDist
                         <h2 className="text-2xl font-extrabold text-gray-800 dark:text-gray-100">
                             Halo, {auth.user.name}! Lihat performa apotek Anda.
                         </h2>
-                        <p className="text-sm text-gray-500">Ringkasan transaksi dan inventaris real-time hari ini.</p>
+                        <p className="text-sm text-gray-500">
+                            {scope === 'own'
+                                ? 'Ringkasan transaksi Anda sendiri dan inventaris real-time hari ini.'
+                                : 'Ringkasan transaksi dan inventaris real-time hari ini.'}
+                        </p>
                     </div>
                 </div>
 
