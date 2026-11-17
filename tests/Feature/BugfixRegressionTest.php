@@ -249,4 +249,72 @@ class BugfixRegressionTest extends TestCase
         $page = $this->actingAs($this->user)->withSession(['invoice_number' => 'TRX-1'])->get(route('pos.index'));
         $this->assertSame('TRX-1', $page->viewData('page')['props']['flash']['invoice_number'] ?? null);
     }
+
+    private function userWithRole(string $slug): User
+    {
+        $role = Role::firstOrCreate(['slug' => $slug], ['name' => ucfirst($slug), 'description' => $slug]);
+        return User::factory()->create(['role_id' => $role->id, 'branch_id' => $this->user->branch_id, 'is_active' => true]);
+    }
+
+    private function prescription(string $status = 'DRAFT', ?string $attachment = null): \App\Models\Prescription
+    {
+        return \App\Models\Prescription::create([
+            'prescription_number' => 'RSP-' . uniqid(), 'patient_name' => 'A', 'doctor_name' => 'B',
+            'prescription_date' => now()->toDateString(), 'status' => $status,
+            'attachment' => $attachment, 'user_id' => $this->user->id,
+        ]);
+    }
+
+    public function test_kasir_cannot_delete_or_restore_prescriptions(): void
+    {
+        $kasir = $this->userWithRole('kasir');
+        $p = $this->prescription();
+
+        $this->actingAs($kasir)->delete(route('prescriptions.destroy', $p->id))->assertForbidden();
+        $this->actingAs($kasir)->post(route('prescriptions.bulk-destroy'), ['ids' => [$p->id]])->assertForbidden();
+        $this->assertNull($p->fresh()->deleted_at);
+
+        $p->delete();
+        $this->actingAs($kasir)->post(route('prescriptions.restore', $p->id))->assertForbidden();
+        $this->actingAs($kasir)->delete(route('prescriptions.force-delete', $p->id))->assertForbidden();
+        $this->assertSoftDeleted('prescriptions', ['id' => $p->id]);
+    }
+
+    public function test_dispensed_prescription_cannot_be_trashed(): void
+    {
+        $p = $this->prescription('DISPENSED');
+
+        $this->actingAs($this->user)->delete(route('prescriptions.destroy', $p->id))->assertSessionHasErrors('message');
+        $this->actingAs($this->user)->post(route('prescriptions.bulk-destroy'), ['ids' => [$p->id]]);
+
+        $this->assertNull($p->fresh()->deleted_at);
+    }
+
+    public function test_force_delete_removes_prescription_attachment_file(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+        \Illuminate\Support\Facades\Storage::disk('public')->put('prescriptions/x.jpg', 'img');
+        $p = $this->prescription('DRAFT', 'prescriptions/x.jpg');
+        $p->delete();
+
+        $this->actingAs($this->user)->delete(route('prescriptions.force-delete', $p->id))->assertSessionHasNoErrors();
+
+        \Illuminate\Support\Facades\Storage::disk('public')->assertMissing('prescriptions/x.jpg');
+    }
+
+    public function test_supplier_code_of_trashed_supplier_is_rejected_by_validation(): void
+    {
+        $type = \App\Models\SupplierType::create(['name' => 'PBF', 'prefix_code' => 'PBF']);
+        $old = \App\Models\Supplier::create(['supplier_type_id' => $type->id, 'code' => 'SPL-001', 'name' => 'Lama', 'is_active' => true]);
+        $old->delete();
+
+        $this->actingAs($this->user)->post(route('suppliers.store'), [
+            'supplier_type_id' => $type->id, 'code' => 'SPL-001', 'name' => 'Baru',
+        ])->assertSessionHasErrors('code');
+
+        // quick-store: kode huruf kecil harus dibandingkan sebagai huruf besar
+        $this->actingAs($this->user)->postJson(route('api.suppliers.quick-store'), [
+            'supplier_type_id' => $type->id, 'code' => 'spl-001', 'name' => 'Baru 2',
+        ])->assertStatus(422);
+    }
 }

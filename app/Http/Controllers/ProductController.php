@@ -298,6 +298,7 @@ class ProductController extends Controller
         if (! $request->filled('sku')) {
             $request->merge(['sku' => 'MED-' . date('Ym') . '-' . strtoupper(Str::random(4))]);
         }
+        $request->merge(['sku' => strtoupper($request->sku)]);
 
         $validated = $request->validate([
             'sku' => 'required|string|unique:medicines,sku',
@@ -317,7 +318,6 @@ class ProductController extends Controller
             'is_active' => 'boolean',
         ]);
 
-        $validated['sku'] = strtoupper($validated['sku']);
         $validated['is_active'] = $validated['is_active'] ?? true;
 
         $medicine = Medicine::create($validated);

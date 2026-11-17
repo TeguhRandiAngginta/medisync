@@ -15,6 +15,22 @@ use Inertia\Inertia;
 
 class PrescriptionController extends Controller
 {
+    /** Hapus/pulihkan resep hanya untuk superadmin & apoteker (kasir hanya mencatat/menebus). */
+    private function authorizeManage(): void
+    {
+        $slug = auth()->user()->role->slug ?? '';
+        if (!in_array($slug, ['superadmin', 'apoteker'])) {
+            abort(403, 'Akses Ditolak: hanya Apoteker/Superadmin yang boleh menghapus atau memulihkan resep.');
+        }
+    }
+
+    private function deleteAttachment(?string $path): void
+    {
+        if ($path) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($path);
+        }
+    }
+
     public function index(Request $request)
     {
         $trashed = $request->boolean('trashed', false);
@@ -211,7 +227,12 @@ class PrescriptionController extends Controller
 
     public function destroy(Prescription $prescription)
     {
+        $this->authorizeManage();
         $prescriptionNumber = $prescription->prescription_number;
+
+        if ($prescription->status === 'DISPENSED') {
+            return back()->withErrors(['message' => "Aksi Ditolak: Resep '{$prescriptionNumber}' sudah ditebus di Kasir dan tidak dapat dihapus."]);
+        }
 
         DB::beginTransaction();
         try {
@@ -236,6 +257,7 @@ class PrescriptionController extends Controller
 
     public function restore($id)
     {
+        $this->authorizeManage();
         DB::beginTransaction();
         try {
             $prescription = Prescription::onlyTrashed()->findOrFail($id);
@@ -261,6 +283,7 @@ class PrescriptionController extends Controller
 
     public function forceDelete($id)
     {
+        $this->authorizeManage();
         DB::beginTransaction();
         try {
             $prescription = Prescription::onlyTrashed()->findOrFail($id);
@@ -274,8 +297,10 @@ class PrescriptionController extends Controller
             }
 
             $number = $prescription->prescription_number;
+            $attachment = $prescription->attachment;
             PrescriptionItem::onlyTrashed()->where('prescription_id', $prescription->id)->forceDelete();
             $prescription->forceDelete();
+            $this->deleteAttachment($attachment);
 
             if (class_exists(AuditLog::class)) {
                 AuditLog::record(
@@ -296,6 +321,7 @@ class PrescriptionController extends Controller
 
     public function bulkDestroy(Request $request)
     {
+        $this->authorizeManage();
         $validated = $request->validate([
             'ids'   => 'required|array',
             'ids.*' => 'exists:prescriptions,id',
@@ -303,7 +329,7 @@ class PrescriptionController extends Controller
 
         DB::beginTransaction();
         try {
-            $prescriptions = Prescription::whereIn('id', $validated['ids'])->get();
+            $prescriptions = Prescription::whereIn('id', $validated['ids'])->where('status', '!=', 'DISPENSED')->get();
             foreach ($prescriptions as $p) {
                 $p->items()->delete();
                 $p->delete();
@@ -323,6 +349,7 @@ class PrescriptionController extends Controller
 
     public function bulkRestore(Request $request)
     {
+        $this->authorizeManage();
         $validated = $request->validate([
             'ids'   => 'required|array',
             'ids.*' => 'integer',
@@ -351,6 +378,7 @@ class PrescriptionController extends Controller
 
     public function bulkForceDelete(Request $request)
     {
+        $this->authorizeManage();
         $validated = $request->validate([
             'ids'   => 'required|array',
             'ids.*' => 'integer',
@@ -369,8 +397,10 @@ class PrescriptionController extends Controller
                 }
 
                 $number = $p->prescription_number;
+                $attachment = $p->attachment;
                 PrescriptionItem::onlyTrashed()->where('prescription_id', $p->id)->forceDelete();
                 $p->forceDelete();
+                $this->deleteAttachment($attachment);
                 AuditLog::record('resep', 'FORCE DELETE', "Menghapus PERMANEN resep masuk No: {$number} (bulk)");
                 $deletedCount++;
             }
