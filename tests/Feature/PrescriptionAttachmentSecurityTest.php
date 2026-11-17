@@ -102,4 +102,39 @@ class PrescriptionAttachmentSecurityTest extends TestCase
         Storage::disk('local')->assertExists('prescriptions/old.jpg');
         $this->actingAs($this->user)->get(route('prescriptions.attachment', $p->id))->assertOk();
     }
+
+    private function storePrescription(UploadedFile $file)
+    {
+        $medicine = \App\Models\Medicine::firstOrCreate(['sku' => 'SKU-LIMIT'], [
+            'medicine_category_id' => \App\Models\MedicineCategory::firstOrCreate(['name' => 'Obat'], ['is_active' => true])->id,
+            'name' => 'Obat', 'base_unit' => 'Tablet', 'selling_price' => 1000, 'min_stock' => 1, 'is_active' => true,
+        ]);
+
+        return $this->actingAs($this->user)->post(route('prescriptions.store'), [
+            'patient_name' => 'A', 'doctor_name' => 'B', 'prescription_date' => now()->toDateString(), 'attachment' => $file,
+            'items' => [['medicine_id' => $medicine->id, 'quantity' => 1, 'signa' => '1x1']],
+        ]);
+    }
+
+    public function test_attachment_up_to_5_mb_is_accepted_and_larger_is_rejected(): void
+    {
+        $this->storePrescription(UploadedFile::fake()->create('foto.jpg', 4096, 'image/jpeg'))->assertSessionHasNoErrors();
+        $this->storePrescription(UploadedFile::fake()->create('scan.pdf', 5120, 'application/pdf'))->assertSessionHasNoErrors();
+        $this->storePrescription(UploadedFile::fake()->create('foto.webp', 1024, 'image/webp'))->assertSessionHasNoErrors();
+        $this->assertSame(3, Prescription::count());
+
+        $this->storePrescription(UploadedFile::fake()->create('besar.jpg', 6144, 'image/jpeg'))
+            ->assertSessionHasErrors(['attachment' => 'Ukuran lampiran maksimal 5 MB.']);
+        $this->assertSame(3, Prescription::count());
+    }
+
+    public function test_ai_scan_and_attachment_share_the_same_limit(): void
+    {
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response(['candidates' => [['content' => ['parts' => [['text' => '{"items":[]}']]]]]])]);
+        config(['services.google_ai.api_key' => 'test-key']);
+
+        $this->actingAs($this->user)->postJson(route('api.prescriptions.analyze'), ['attachment' => UploadedFile::fake()->create('ok.jpg', 4096, 'image/jpeg')])->assertOk();
+        $this->actingAs($this->user)->postJson(route('api.prescriptions.analyze'), ['attachment' => UploadedFile::fake()->create('besar.jpg', 6144, 'image/jpeg')])
+            ->assertStatus(422)->assertJsonValidationErrors('attachment');
+    }
 }

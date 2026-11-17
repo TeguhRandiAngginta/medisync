@@ -15,6 +15,15 @@ use Inertia\Inertia;
 
 class PrescriptionController extends Controller
 {
+    /** Batas ukuran lampiran/foto resep (KB); sama untuk simpan lampiran dan scan AI. */
+    private const ATTACHMENT_MAX_KB = 5120;
+
+    private const ATTACHMENT_MESSAGES = [
+        'attachment.max'   => 'Ukuran lampiran maksimal 5 MB.',
+        'attachment.mimes' => 'Format lampiran harus JPG, PNG, WEBP, atau PDF.',
+        'attachment.uploaded' => 'Lampiran gagal diunggah. Pastikan ukurannya tidak melebihi 5 MB.',
+    ];
+
     /** Hapus/pulihkan resep hanya untuk superadmin & apoteker (kasir hanya mencatat/menebus). */
     private function authorizeManage(): void
     {
@@ -85,12 +94,12 @@ class PrescriptionController extends Controller
             'doctor_name'         => 'required|string|max:255',
             'prescription_date'   => 'required|date',
             'notes'               => 'nullable|string',
-            'attachment'          => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
+            'attachment'          => 'nullable|file|mimes:jpg,jpeg,png,webp,pdf|max:' . self::ATTACHMENT_MAX_KB,
             'items'               => 'required|array|min:1',
             'items.*.medicine_id' => 'required|exists:medicines,id', 
             'items.*.quantity'    => 'required|integer|min:1',
             'items.*.signa'       => 'required|string|max:255',
-        ]);
+        ], self::ATTACHMENT_MESSAGES);
 
         DB::beginTransaction();
         try {
@@ -164,8 +173,8 @@ class PrescriptionController extends Controller
     {
         try {
             $request->validate([
-                'attachment' => 'required|file|mimes:jpg,jpeg,png,webp|max:5120'
-            ]);
+                'attachment' => 'required|file|mimes:jpg,jpeg,png,webp|max:' . self::ATTACHMENT_MAX_KB
+            ], self::ATTACHMENT_MESSAGES);
             
             $file = $request->file('attachment');
             $base64Image = base64_encode(file_get_contents($file->getPathname()));
