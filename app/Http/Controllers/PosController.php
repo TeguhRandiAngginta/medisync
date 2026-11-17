@@ -268,4 +268,21 @@ class PosController extends Controller
             return back()->withErrors(['message' => 'Gagal memproses transaksi: ' . $e->getMessage()]);
         }
     }
+
+    /**
+     * Struk 58mm yang langsung membuka dialog cetak (lihat onload di view).
+     * Superadmin/owner boleh mencetak ulang semua struk; kasir dan apoteker hanya miliknya sendiri
+     * (struk milik orang lain dijawab 404 agar keberadaannya tidak terungkap).
+     */
+    public function printReceipt(string $invoice)
+    {
+        $isOwner = in_array(auth()->user()->role->slug ?? '', ['superadmin', 'owner']);
+
+        $sale = Sale::with(['user', 'details.medicine' => fn ($q) => $q->withTrashed()])
+            ->where('invoice_number', $invoice)
+            ->when(!$isOwner, fn ($q) => $q->where('user_id', auth()->id()))
+            ->firstOrFail();
+
+        return view('pos.receipt-pdf', compact('sale'));
+    }
 }
