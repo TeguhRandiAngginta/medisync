@@ -20,13 +20,29 @@ class SalesHistoryController extends Controller
         }
     }
 
+    private function isOwner(): bool
+    {
+        return in_array(auth()->user()->role->slug ?? '', ['superadmin', 'owner']);
+    }
+
+    /** Superadmin/owner melihat semua transaksi; kasir dan apoteker hanya miliknya sendiri. */
+    private function visibleSales()
+    {
+        return Sale::query()->when(!$this->isOwner(), fn ($q) => $q->where('user_id', auth()->id()));
+    }
+
     public function index(Request $request)
     {
         $trashed = $request->boolean('trashed', false);
+
+        // Trash (pulihkan/hapus permanen) hanya untuk superadmin/owner.
+        if ($trashed) {
+            $this->checkOwnerAccess();
+        }
         $filter = $request->get('filter', 'all');
         $date = $request->get('date');
 
-        $query = Sale::with(['user', 'details.medicine']);
+        $query = $this->visibleSales()->with(['user', 'details.medicine']);
 
         if ($trashed) {
             $query->onlyTrashed();
@@ -50,13 +66,14 @@ class SalesHistoryController extends Controller
             ->paginate(15)
             ->withQueryString();
 
-        $trashedCount = Sale::onlyTrashed()->count();
+        $trashedCount = $this->isOwner() ? Sale::onlyTrashed()->count() : 0;
 
         return Inertia::render('Sales/Index', [
             'sales'        => $sales,
             'isTrash'      => $trashed,
             'trashed'      => $trashed,
             'trashedCount' => $trashedCount,
+            'canManage'    => $this->isOwner(),
             'filters'      => [
                 'filter' => $filter,
                 'date'   => $date,
@@ -66,6 +83,8 @@ class SalesHistoryController extends Controller
 
     public function trash(Request $request)
     {
+        $this->checkOwnerAccess();
+
         $filter = $request->get('filter', 'all');
         $date = $request->get('date');
 
@@ -93,6 +112,7 @@ class SalesHistoryController extends Controller
             'isTrash'      => true,
             'trashed'      => true,
             'trashedCount' => $trashedCount,
+            'canManage'    => true,
             'filters'      => [
                 'filter' => $filter,
                 'date'   => $date,

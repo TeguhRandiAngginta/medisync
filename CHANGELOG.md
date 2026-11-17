@@ -35,7 +35,8 @@ Perubahan di bawah ini dicatat pada branch `ditz`.
 - Aturan stok rendah diseragamkan lewat scope `Medicine::lowStock()` (obat aktif dengan `stock <= min_stock`) dan dipakai di laporan (ringkasan dan export), dashboard (jumlah dan daftar), serta `AlertService`. Sebelumnya laporan memakai ambang tetap 10 dan jumlah di dashboard tidak memfilter obat nonaktif.
 - Export "Laporan Laba Rugi" memakai HPP riil dari `sale_details.purchase_price` lewat `ReportController::saleHpp()` yang juga dipakai halaman laporan, sehingga laba export sama dengan di layar (sebelumnya `selling_price * 0.7`). Export tidak lagi error 500 bila ada obat yang sudah di-trash.
 - Dashboard: data penjualan seluruh toko (omzet hari ini, grafik, produk terlaris, distribusi pembayaran, transaksi terbaru) kini hanya untuk superadmin, sama seperti halaman Laporan. Kasir dan apoteker hanya melihat transaksi miliknya sendiri; UI menampilkan keterangan "Ringkasan transaksi Anda sendiri" lewat prop `scope`. Peringatan stok rendah dan kedaluwarsa tetap tampil untuk semua peran. Sebelumnya kasir bisa melihat omzet seluruh toko.
-- Test regresi baru: `tests/Feature/BugfixRegressionTest.php` (20 test), `tests/Feature/StockLedgerTest.php` (4 test), `tests/Feature/ReportExportTest.php` (3 test), `tests/Feature/DashboardScopeTest.php` (3 test), dan `tests/Feature/PrescriptionOcrMatchingTest.php` (7 test, butuh PostgreSQL karena memakai `ilike`; dilewati di SQLite). Pada kode lama, test yang menguji perilaku baru gagal. Seluruh suite: 82 test lulus di PostgreSQL, dan di SQLite 75 lulus + 7 dilewati.
+- Riwayat penjualan (`SalesHistoryController`): kasir dan apoteker hanya melihat transaksinya sendiri, tab Trash (dan `sales.trash`) hanya untuk superadmin/owner (selain itu 403), jumlah trash disembunyikan, dan tombol tab Trash tidak ditampilkan di UI (prop `canManage`).
+- Test regresi baru: `tests/Feature/BugfixRegressionTest.php` (20 test), `tests/Feature/StockLedgerTest.php` (4 test), `tests/Feature/ReportExportTest.php` (3 test), `tests/Feature/DashboardScopeTest.php` (3 test), `tests/Feature/SalesHistoryScopeTest.php` (4 test), dan `tests/Feature/PrescriptionOcrMatchingTest.php` (7 test, butuh PostgreSQL karena memakai `ilike`; dilewati di SQLite). Pada kode lama, test yang menguji perilaku baru gagal. Seluruh suite: 86 test lulus di PostgreSQL, dan di SQLite 79 lulus + 7 dilewati.
 
 **Catatan data lama:** item resep versi lama yang sudah terlanjur berstatus soft-deleted di database bisa tetap muncul saat resep dipulihkan; perbaikan hanya berlaku untuk edit berikutnya. Juga, perbaikan stok membengkak hanya berlaku untuk transaksi yang diproses setelah ini. Transaksi yang sudah pernah dihapus lalu dipulihkan pada kode lama bisa masih punya baris ganda di `sale_detail_batches`, sehingga menghapusnya lagi tetap mengembalikan stok dua kali. Cek dengan: `SELECT sale_detail_id FROM sale_detail_batches b JOIN sale_details d ON d.id = b.sale_detail_id GROUP BY sale_detail_id, d.quantity HAVING SUM(b.quantity) > d.quantity;`. Migrasi pembersih belum dibuat.
 
@@ -44,6 +45,41 @@ Perubahan di bawah ini dicatat pada branch `ditz`.
 2. Buat key: `docker compose run --rm --no-deps -e APP_KEY=base64:placeholder app php artisan key:generate --show`, lalu tempel hasilnya ke `APP_KEY=` di `.env`.
 3. `docker compose up -d --build`, lalu `docker compose exec app php artisan db:seed --force` (`--force` wajib karena `APP_ENV=production`).
 4. Login `admin@medisync.com` / `password` (ganti segera).
+
+### Catatan
+
+**Perubahan perilaku yang perlu diketahui tim**
+- Omzet, grafik, produk terlaris, dan riwayat penjualan seluruh toko kini hanya untuk superadmin. Apoteker saya samakan dengan kasir (hanya data sendiri) karena halaman Laporan pun tidak terbuka untuk apoteker. Bila apoteker perlu melihat omzet toko, tambahkan perannya di `DashboardController` dan `SalesHistoryController`.
+- Peran `owner` disebut di `SalePolicy` dan `checkOwnerAccess`, tetapi seeder hanya membuat superadmin, apoteker, dan kasir. Praktis hanya superadmin yang bisa menghapus/memulihkan transaksi dan faktur.
+- Batch kedaluwarsa tidak lagi dijual oleh kasir. Stok "tersedia" kini hanya menghitung batch yang belum kedaluwarsa, jadi penjualan bisa ditolak walau `medicines.stock` (yang menjumlahkan semua batch) masih positif. Hapus batch kedaluwarsa lewat opname bertipe `EXPIRED`.
+- Pembatalan atau pemulihan stock opname ditolak bila stok batch sudah berubah sampai hasilnya negatif. Solusinya membuat opname koreksi baru, bukan membatalkan yang lama.
+- Obat hasil OCR resep yang ambigu (beberapa kekuatan/varian) tidak dipilih otomatis. Apoteker memilih manual dari daftar pada catatan peringatan.
+- Laporan stok kritis kini mengikuti `min_stock` tiap obat (bukan angka tetap 10). Obat dengan `min_stock = 0` (default kolom) baru dianggap kritis saat stoknya habis; isi `min_stock` di master obat bila perlu.
+- Laba pada export laba rugi kini memakai HPP riil dan sama dengan di layar. Laporan lama yang sudah dicetak (rumus 70% harga jual) tidak akan cocok dengan export baru.
+- Harga di POS selalu diambil dari master obat; perubahan harga oleh klien diabaikan. Kembalian dihitung server dan pembayaran kurang ditolak.
+
+**Data lama (tidak otomatis diperbaiki)**
+- `stock_adjustments`: migrasi diganti nama; database yang sudah ada tetap aman karena ada guard `Schema::hasTable`.
+- Transaksi yang pernah dihapus lalu dipulihkan pada kode lama bisa punya baris ganda di `sale_detail_batches`; query pengecekan ada pada catatan di bawah Fixed. Migrasi pembersih belum dibuat.
+- Item resep versi lama yang sudah soft-deleted di database bisa muncul lagi saat resep dipulihkan; perbaikan hanya berlaku untuk edit berikutnya.
+- Opname lama yang dulu dipaksa ke 0 oleh `max(0, ...)` tidak bisa dipulihkan otomatis dan perlu dicek manual.
+- Kartu stok mengandaikan stok berasal dari pembelian, penjualan, dan opname. Stok awal atau perubahan stok di luar ketiganya tidak tercatat sehingga saldonya bisa berbeda dari stok nyata untuk data semacam itu.
+
+**Operasional Docker**
+- Setelah container `app` dibuat ulang, jalankan `docker compose restart web` (atau `up -d --force-recreate web`); bila tidak, Nginx masih mengarah ke IP lama dan mengembalikan 502.
+- Setelah restart Docker Desktop, port yang dipublikasikan bisa hilang; `docker compose up -d --force-recreate web` memulihkannya.
+- Port 8080 di mesin pengembangan sudah dipakai; `.env` lokal memakai `APP_PORT=8081`.
+- Ganti password admin bawaan (`admin@medisync.com` / `password`) dan `DB_PASSWORD` sebelum dipakai di luar mesin lokal. `.env` di-gitignore.
+- `bootstrap/cache/*.php` sengaja masuk `.dockerignore`: cache paket hasil `composer install` dengan dependensi dev (mis. Pail) membuat container produksi crash.
+
+**Menjalankan test**
+- PHP lokal (7.4) tidak bisa dipakai; test dijalankan di dalam container PHP 8.3 dari image proyek dengan folder proyek dimount.
+- Test yang merender halaman Inertia butuh `public/build/manifest.json` hasil build asli (stub manifest tidak cukup).
+- `PrescriptionOcrMatchingTest` butuh PostgreSQL (operator `ilike`). Buat database `medisync_test` di container `db`, lalu jalankan dengan `DB_CONNECTION=pgsql` dan jaringan compose; di SQLite test ini dilewati. Seluruh suite lulus di kedua database.
+
+**Batas verifikasi**
+- Semua temuan dan perbaikan bersumber dari membaca kode dan test otomatis; belum ada uji manual di browser. Perubahan UI sangat kecil (kolom "Saldo Stok", subjudul dashboard, tab Trash) dan build frontend berhasil.
+- Frontend `resources/js` hanya dibaca pada bagian yang diubah.
 
 ### Known issues (hasil screening, belum diperbaiki)
 Tag **[V]** = terlihat jelas dari membaca kode, **[?]** = perlu dicek/direproduksi.
@@ -67,7 +103,6 @@ Cakupan: controller dan service domain sudah dibaca (`Pos`, `CashRegister`, `Pur
 
 **Rendah**
 - **[V]** Peran `owner` tidak pernah dibuat seeder, padahal `SalePolicy` dan `checkOwnerAccess` menyebutnya. Hanya superadmin yang bisa menghapus.
-- **[V]** Kasir bisa melihat seluruh riwayat penjualan dan tab trash.
 - **[?]** Parsing `payment_method` split di `CashRegisterController::closeShift` rapuh untuk nominal desimal.
 - **[V]** `Medicine.stock` (`syncMedicineStock`) menjumlahkan semua batch termasuk kedaluwarsa, sedangkan POS mengecualikannya, sehingga angka stok berbeda antar halaman.
 - **[V]** `PrescriptionController::index` dan `StockAdjustmentController::create` memuat semua data tanpa paginasi.
@@ -77,3 +112,4 @@ Cakupan: controller dan service domain sudah dibaca (`Pos`, `CashRegister`, `Pur
 - **[V]** Parameter tanggal laporan tidak divalidasi; nilai tidak valid memicu exception `Carbon::parse` (500).
 - **[V]** `RackController::store` memakai fallback `branch_id ?? 1` yang di-hardcode.
 - **[?]** Soft delete kategori obat atau tipe referensi yang masih dipakai diizinkan, sehingga relasinya bernilai null di UI.
+- **[V]** Route `pos.receipt` (`GET /pos/receipt/{invoice}`) menunjuk ke `PosController::printReceipt` yang tidak ada (view `pos/receipt-pdf.blade.php` sudah ada tetapi tidak dipakai); memanggil route itu menghasilkan error 500. Tidak dipakai oleh frontend saat ini.
