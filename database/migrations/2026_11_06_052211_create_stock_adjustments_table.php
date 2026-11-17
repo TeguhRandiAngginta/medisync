@@ -7,6 +7,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Guard: database lama sudah menjalankan migrasi ini dengan nama file sebelumnya.
+        if (Schema::hasTable('stock_adjustments')) {
+            return;
+        }
+
         Schema::create('stock_adjustments', function (Blueprint $table) {
             $table->id();
             $table->foreignId('medicine_id')->constrained('medicines')->onDelete('cascade');
