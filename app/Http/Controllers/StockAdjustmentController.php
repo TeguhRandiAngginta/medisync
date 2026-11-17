@@ -241,41 +241,49 @@ class StockAdjustmentController extends Controller
     }
 
     /**
-     * Helper: Rollback adjustment difference from batch
-     * difference = actual - system
-     * to rollback: subtract difference (or system - actual)
+     * Batalkan efek opname: stok batch dikurangi/ditambah kebalikan dari selisih (difference = actual - system).
+     * Dibatalkan bila hasilnya akan negatif atau batch tidak tersedia, bukan dipaksa ke 0 (selisih hilang diam-diam).
      */
     private function rollbackAdjustmentStock(StockAdjustment $adjustment): void
     {
-        if ($adjustment->product_batch_id) {
-            $batch = ProductBatch::where('id', $adjustment->product_batch_id)->lockForUpdate()->first();
-            if ($batch) {
-                // actual = system + difference
-                // to restore back to system: new_stock = batch.stock - difference
-                $newStock = max(0, $batch->stock_quantity - $adjustment->difference);
-                $batch->update(['stock_quantity' => $newStock]);
-                InventoryService::syncMedicineStock($batch->medicine_id);
-            }
-        } elseif ($adjustment->medicine_id) {
-            InventoryService::syncMedicineStock($adjustment->medicine_id);
-        }
+        $this->applyAdjustmentDelta($adjustment, -$adjustment->difference, 'dibatalkan');
+    }
+
+    /** Terapkan ulang efek opname saat dipulihkan dari trash. */
+    private function reapplyAdjustmentStock(StockAdjustment $adjustment): void
+    {
+        $this->applyAdjustmentDelta($adjustment, $adjustment->difference, 'dipulihkan');
     }
 
     /**
-     * Helper: Re-apply adjustment difference to batch
+     * @throws \Exception bila stok batch sudah berubah sehingga operasi akan menghasilkan stok negatif,
+     *                    atau batch sudah tidak ada (mis. faktur pembeliannya ada di trash).
      */
-    private function reapplyAdjustmentStock(StockAdjustment $adjustment): void
+    private function applyAdjustmentDelta(StockAdjustment $adjustment, int $delta, string $verb): void
     {
-        if ($adjustment->product_batch_id) {
-            $batch = ProductBatch::where('id', $adjustment->product_batch_id)->lockForUpdate()->first();
-            if ($batch) {
-                // re-apply difference
-                $newStock = max(0, $batch->stock_quantity + $adjustment->difference);
-                $batch->update(['stock_quantity' => $newStock]);
-                InventoryService::syncMedicineStock($batch->medicine_id);
+        if (!$adjustment->product_batch_id) {
+            if ($adjustment->medicine_id) {
+                InventoryService::syncMedicineStock($adjustment->medicine_id);
             }
-        } elseif ($adjustment->medicine_id) {
-            InventoryService::syncMedicineStock($adjustment->medicine_id);
+            return;
         }
+
+        $batch = ProductBatch::where('id', $adjustment->product_batch_id)->lockForUpdate()->first();
+
+        if (!$batch) {
+            throw new \Exception("Opname #{$adjustment->id} tidak dapat {$verb}: batch terkait sudah dihapus (periksa faktur pembelian di trash).");
+        }
+
+        $newStock = $batch->stock_quantity + $delta;
+
+        if ($newStock < 0) {
+            throw new \Exception(
+                "Opname #{$adjustment->id} tidak dapat {$verb}: stok batch '{$batch->batch_number}' saat ini {$batch->stock_quantity}, "
+                . "operasi ini akan membuat stok menjadi {$newStock}. Stok sudah berubah sejak opname dicatat."
+            );
+        }
+
+        $batch->update(['stock_quantity' => $newStock]);
+        InventoryService::syncMedicineStock($batch->medicine_id);
     }
 }
