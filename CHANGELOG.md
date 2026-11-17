@@ -10,7 +10,7 @@ Perubahan di bawah ini dicatat pada branch `ditz`.
 - `docker-compose.yml` dengan 4 service: `app` (PHP-FPM + auto-migrate), `queue` (`queue:work`), `web` (Nginx, port `APP_PORT`, default 8080), `db` (PostgreSQL 16).
 - `docker/entrypoint.sh` (cek `APP_KEY`, `storage:link`, migrate opsional, cache config/route/view), `docker/nginx/default.conf`, `docker/php.ini` (upload 20M, timeout 150 dtk).
 - `.dockerignore` dan `.env.docker.example` (template `.env` untuk Docker).
-- Volume `storage` dibagi ke `web` agar lampiran resep (`/storage/prescriptions/...`) bisa diakses.
+- Volume `storage` dibagi ke `web` (read-only) untuk file di `storage/app/public`. Lampiran resep sudah tidak memakainya (lihat Fixed).
 
 ### Fixed
 - Migrasi gagal di database kosong: `create_stock_adjustments_table` membuat FK ke `product_batches` sebelum tabel itu ada. File diganti nama dari `2026_11_02_000001_...` menjadi `2026_11_06_052211_...` dan diberi guard `Schema::hasTable` agar database lama yang sudah menjalankan migrasi tidak error.
@@ -36,7 +36,8 @@ Perubahan di bawah ini dicatat pada branch `ditz`.
 - Export "Laporan Laba Rugi" memakai HPP riil dari `sale_details.purchase_price` lewat `ReportController::saleHpp()` yang juga dipakai halaman laporan, sehingga laba export sama dengan di layar (sebelumnya `selling_price * 0.7`). Export tidak lagi error 500 bila ada obat yang sudah di-trash.
 - Dashboard: data penjualan seluruh toko (omzet hari ini, grafik, produk terlaris, distribusi pembayaran, transaksi terbaru) kini hanya untuk superadmin, sama seperti halaman Laporan. Kasir dan apoteker hanya melihat transaksi miliknya sendiri; UI menampilkan keterangan "Ringkasan transaksi Anda sendiri" lewat prop `scope`. Peringatan stok rendah dan kedaluwarsa tetap tampil untuk semua peran. Sebelumnya kasir bisa melihat omzet seluruh toko.
 - Riwayat penjualan (`SalesHistoryController`): kasir dan apoteker hanya melihat transaksinya sendiri, tab Trash (dan `sales.trash`) hanya untuk superadmin/owner (selain itu 403), jumlah trash disembunyikan, dan tombol tab Trash tidak ditampilkan di UI (prop `canManage`).
-- Test regresi baru: `tests/Feature/BugfixRegressionTest.php` (20 test), `tests/Feature/StockLedgerTest.php` (4 test), `tests/Feature/ReportExportTest.php` (3 test), `tests/Feature/DashboardScopeTest.php` (3 test), `tests/Feature/SalesHistoryScopeTest.php` (4 test), dan `tests/Feature/PrescriptionOcrMatchingTest.php` (7 test, butuh PostgreSQL karena memakai `ilike`; dilewati di SQLite). Pada kode lama, test yang menguji perilaku baru gagal. Seluruh suite: 86 test lulus di PostgreSQL, dan di SQLite 79 lulus + 7 dilewati.
+- Lampiran resep (data medis pasien) tidak lagi dilayani tanpa login lewat `/storage/...`: file baru disimpan di disk privat `local` dan dibuka lewat route berotorisasi `GET /prescriptions/{prescription}/attachment` (`prescriptions.attachment`, wajib login dengan peran superadmin/apoteker/kasir, header `X-Content-Type-Options: nosniff`). Lampiran lama di disk `public` tetap bisa dibuka lewat route yang sama sebagai cadangan. Tautan di halaman Resep mengarah ke route baru. Command baru `php artisan prescriptions:secure-attachments` memindahkan lampiran lama ke disk privat. Hapus permanen resep menghapus file dari kedua disk.
+- Test regresi baru: `tests/Feature/BugfixRegressionTest.php` (20 test), `tests/Feature/StockLedgerTest.php` (4 test), `tests/Feature/ReportExportTest.php` (3 test), `tests/Feature/DashboardScopeTest.php` (3 test), `tests/Feature/SalesHistoryScopeTest.php` (4 test), `tests/Feature/PrescriptionAttachmentSecurityTest.php` (6 test), dan `tests/Feature/PrescriptionOcrMatchingTest.php` (7 test, butuh PostgreSQL karena memakai `ilike`; dilewati di SQLite). Pada kode lama, test yang menguji perilaku baru gagal. Seluruh suite: 92 test lulus di PostgreSQL, dan di SQLite 85 lulus + 7 dilewati.
 
 **Catatan data lama:** item resep versi lama yang sudah terlanjur berstatus soft-deleted di database bisa tetap muncul saat resep dipulihkan; perbaikan hanya berlaku untuk edit berikutnya. Juga, perbaikan stok membengkak hanya berlaku untuk transaksi yang diproses setelah ini. Transaksi yang sudah pernah dihapus lalu dipulihkan pada kode lama bisa masih punya baris ganda di `sale_detail_batches`, sehingga menghapusnya lagi tetap mengembalikan stok dua kali. Cek dengan: `SELECT sale_detail_id FROM sale_detail_batches b JOIN sale_details d ON d.id = b.sale_detail_id GROUP BY sale_detail_id, d.quantity HAVING SUM(b.quantity) > d.quantity;`. Migrasi pembersih belum dibuat.
 
@@ -59,6 +60,7 @@ Perubahan di bawah ini dicatat pada branch `ditz`.
 - Harga di POS selalu diambil dari master obat; perubahan harga oleh klien diabaikan. Kembalian dihitung server dan pembayaran kurang ditolak.
 
 **Data lama (tidak otomatis diperbaiki)**
+- **Wajib dijalankan sekali di setiap lingkungan yang sudah punya lampiran resep:** `php artisan prescriptions:secure-attachments` (di Docker: `docker compose exec app php artisan prescriptions:secure-attachments`). Selama belum dijalankan, lampiran lama masih bisa dibuka tanpa login lewat `/storage/prescriptions/...`. Sudah diuji di stack Docker: sebelum command `/storage/...` mengembalikan 200, sesudahnya 404, dan route lampiran tanpa login dialihkan ke `/login`.
 - `stock_adjustments`: migrasi diganti nama; database yang sudah ada tetap aman karena ada guard `Schema::hasTable`.
 - Transaksi yang pernah dihapus lalu dipulihkan pada kode lama bisa punya baris ganda di `sale_detail_batches`; query pengecekan ada pada catatan di bawah Fixed. Migrasi pembersih belum dibuat.
 - Item resep versi lama yang sudah soft-deleted di database bisa muncul lagi saat resep dipulihkan; perbaikan hanya berlaku untuk edit berikutnya.
@@ -91,7 +93,6 @@ Cakupan: controller dan service domain sudah dibaca (`Pos`, `CashRegister`, `Pur
 **Sedang**
 - **[V]** `GoogleAIService`: daftar model fallback di-hardcode dan dicoba berurutan, tiap kegagalan menghabiskan timeout 25 dtk (hingga ±125 dtk).
 - **[?]** Nama model `gemini-3.8-flash` dan `gemini-1.5-*` perlu dicocokkan dengan daftar model Gemini yang berlaku.
-- **[V]** Lampiran resep disimpan di disk `public` dan dilayani tanpa login. Nama file acak (tidak bisa ditebak), tetapi URL yang bocor tidak bisa dicabut. Data medis pasien.
 - **[V]** Nomor resep `RSP-Ymd-mt_rand(1,999)` di `PrescriptionController::store` rawan bentrok. Kolom `prescription_number` unik, jadi bentrok menghasilkan pesan gagal simpan.
 - **[?]** `smartSearch`: bila AI mengembalikan objek bersarang, `$keywords` berisi array dan query menjadi `ilike '%Array%'`.
 - **[?]** `openShift` tidak punya kunci atau unique constraint, klik ganda cepat bisa membuat dua shift terbuka.

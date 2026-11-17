@@ -47,6 +47,7 @@ Route::middleware(['auth', 'verified', 'role:superadmin,apoteker,kasir'])->group
     Route::post('/api/prescriptions/analyze', [PrescriptionController::class, 'analyzeImage'])->middleware('throttle:10,1')->name('api.prescriptions.analyze');
     Route::get('/api/prescriptions-drafts', [PrescriptionController::class, 'getDraftsForPos'])->name('api.prescriptions.drafts');
     Route::get('/api/prescriptions/{number}', [PrescriptionController::class, 'getForPos'])->name('api.prescriptions.get');
+    Route::get('/prescriptions/{prescription}/attachment', [PrescriptionController::class, 'attachment'])->name('prescriptions.attachment');
     Route::post('/prescriptions/bulk-destroy', [PrescriptionController::class, 'bulkDestroy'])->name('prescriptions.bulk-destroy');
     Route::post('/prescriptions/bulk-restore', [PrescriptionController::class, 'bulkRestore'])->name('prescriptions.bulk-restore');
     Route::post('/prescriptions/bulk-force-delete', [PrescriptionController::class, 'bulkForceDelete'])->name('prescriptions.bulk-force-delete');

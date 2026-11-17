@@ -27,8 +27,25 @@ class PrescriptionController extends Controller
     private function deleteAttachment(?string $path): void
     {
         if ($path) {
+            // disk privat (baru) dan public (lampiran lama sebelum dipindahkan)
+            \Illuminate\Support\Facades\Storage::disk('local')->delete($path);
             \Illuminate\Support\Facades\Storage::disk('public')->delete($path);
         }
+    }
+
+    /** Tampilkan lampiran resep hanya untuk user yang login (route berada di grup auth + role). */
+    public function attachment(Prescription $prescription)
+    {
+        $path = $prescription->attachment;
+        $storage = \Illuminate\Support\Facades\Storage::class;
+
+        foreach (['local', 'public'] as $disk) { // 'public' = lampiran lama yang belum dipindahkan
+            if ($path && $storage::disk($disk)->exists($path)) {
+                return $storage::disk($disk)->response($path, null, ['X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'private, max-age=0, must-revalidate']);
+            }
+        }
+
+        abort(404, 'Lampiran resep tidak ditemukan.');
     }
 
     public function index(Request $request)
@@ -78,7 +95,7 @@ class PrescriptionController extends Controller
         try {
             $attachmentPath = null;
             if ($request->hasFile('attachment')) {
-                $attachmentPath = $request->file('attachment')->store('prescriptions', 'public');
+                $attachmentPath = $request->file('attachment')->store('prescriptions', 'local'); // disk privat, dibuka lewat route berotorisasi
             }
 
             $randomNumber = str_pad(mt_rand(1, 999), 3, '0', STR_PAD_LEFT);

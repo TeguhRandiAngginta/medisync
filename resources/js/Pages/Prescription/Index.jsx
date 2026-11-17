@@ -347,7 +347,7 @@ export default function Index({ prescriptions = [], trashed = false, trashedCoun
                                         <div className="font-mono font-bold text-gray-800 dark:text-gray-200">{resep.prescription_number}</div>
                                         {resep.attachment && (
                                             <a
-                                                href={`/storage/${resep.attachment}`}
+                                                href={`/prescriptions/${resep.id}/attachment`}
                                                 target="_blank"
                                                 rel="noreferrer"
                                                 className="text-[10px] text-blue-500 flex items-center gap-1 mt-1 hover:underline"
