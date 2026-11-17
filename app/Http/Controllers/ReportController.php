@@ -51,19 +51,12 @@ class ReportController extends Controller
         $totalHpp = 0;
 
         foreach ($salesList as $sale) {
-            foreach ($sale->details as $detail) {
-                // Mengambil purchase_price riil dari sale_details
-                $hppUnit = $detail->purchase_price > 0 
-                    ? $detail->purchase_price 
-                    : ($detail->medicine->purchase_price ?? 0);
-                    
-                $totalHpp += ($detail->quantity * $hppUnit);
-            }
+            $totalHpp += $this->saleHpp($sale);
         }
         
         $profit = $totalSales - $totalHpp;
 
-        $lowStockCount = Medicine::where('stock', '<=', 10)->count();
+        $lowStockCount = Medicine::lowStock()->count();
 
         $stockMutations = $this->generateStockLedger($medicineId, $startDate, $endDate);
 
@@ -106,6 +99,23 @@ class ReportController extends Controller
             'medicinesList'  => $medicinesList,
             'calendarMonth'  => Carbon::parse($startDate)->format('Y-m-d')
         ]);
+    }
+
+    /**
+     * HPP satu transaksi = jumlah x HPP satuan riil yang tersimpan di sale_details
+     * (cadangan: purchase_price obat bila ada). Dipakai layar dan export agar angkanya sama.
+     */
+    private function saleHpp(Sale $sale): float
+    {
+        $hpp = 0.0;
+        foreach ($sale->details as $detail) {
+            $unit = $detail->purchase_price > 0
+                ? (float) $detail->purchase_price
+                : (float) ($detail->medicine->purchase_price ?? 0);
+            $hpp += $detail->quantity * $unit;
+        }
+
+        return $hpp;
     }
 
     /**
@@ -261,10 +271,11 @@ class ReportController extends Controller
             $title = 'Laporan Laba Rugi & HPP';
             $data = Sale::with(['details.medicine'])
                 ->whereBetween('sale_date', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-                ->orderBy('sale_date', 'desc')->get();
+                ->orderBy('sale_date', 'desc')->get()
+                ->each(fn ($sale) => $sale->hpp = $this->saleHpp($sale));
         } elseif ($type === 'stock') {
             $title = 'Laporan Stok Kritis';
-            $data = Medicine::where('stock', '<=', 10)->get();
+            $data = Medicine::with('category')->lowStock()->orderBy('name')->get();
         } elseif ($type === 'mutations') {
             $title = 'Laporan Mutasi & Kartu Stok Obat';
             $data = $this->generateStockLedger($medicineId, $startDate, $endDate);

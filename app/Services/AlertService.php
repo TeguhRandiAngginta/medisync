@@ -27,8 +27,6 @@ class AlertService
 
     public static function getLowStockMedicines()
     {
-        return Medicine::where('is_active', true)
-            ->whereColumn('stock', '<=', 'min_stock')
-            ->get();
+        return Medicine::lowStock()->get();
     }
 }

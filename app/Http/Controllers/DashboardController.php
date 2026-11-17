@@ -23,7 +23,7 @@ class DashboardController extends Controller
         $todayRevenue = Sale::whereDate('sale_date', $today)->sum('total_amount');
         $todayTransactions = Sale::whereDate('sale_date', $today)->count();
         
-        $lowStockCount = Medicine::whereColumn('stock', '<=', 'min_stock')->count();
+        $lowStockCount = Medicine::lowStock()->count();
         $activeMedicines = Medicine::where('is_active', true)->count();
 
         $chartData = [];
