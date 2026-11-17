@@ -129,9 +129,9 @@ class PosController extends Controller
         $request->validate([
             'cart' => 'required|array|min:1',
             'cart.*.quantity' => 'required|integer|min:1',
-            'cart.*.price' => 'required|numeric',
-            'paid_amount' => 'required|numeric',
-            'change_amount' => 'required|numeric',
+            'cart.*.medicine_id' => 'nullable|integer',
+            'cart.*.id' => 'nullable|integer',
+            'paid_amount' => 'required|numeric|min:0',
             'payment_method' => 'required|string',
             'prescription_id' => 'nullable|exists:prescriptions,id',
         ]);
@@ -154,8 +154,29 @@ class PosController extends Controller
                 $prescription->update(['status' => 'DISPENSED']);
             }
 
-            $invoiceNumber = 'TRX-' . date('YmdHis') . '-' . rand(100, 999);
-            $totalAmount = collect($request->cart)->sum(fn($i) => $i['quantity'] * $i['price']);
+            // Harga SELALU diambil dari master obat, bukan dari request klien.
+            $cartItems = collect($request->cart)->map(function ($item) {
+                $item['resolved_id'] = (int) ($item['medicine_id'] ?? $item['id'] ?? 0);
+                return $item;
+            });
+            $medicines = Medicine::where('is_active', true)
+                ->whereIn('id', $cartItems->pluck('resolved_id')->unique())
+                ->get()
+                ->keyBy('id');
+
+            foreach ($cartItems as $item) {
+                if (!$medicines->has($item['resolved_id'])) {
+                    throw new \Exception('Obat dalam keranjang tidak ditemukan atau sudah nonaktif.');
+                }
+            }
+
+            $invoiceNumber = 'TRX-' . date('YmdHis') . '-' . random_int(1000, 9999);
+            $totalAmount = $cartItems->sum(fn ($i) => $i['quantity'] * (float) $medicines[$i['resolved_id']]->selling_price);
+
+            if (round((float) $request->paid_amount, 2) < round($totalAmount, 2)) {
+                throw new \Exception('Pembayaran kurang dari total belanja.');
+            }
+            $changeAmount = round((float) $request->paid_amount - $totalAmount, 2);
 
             $activeShift = \App\Models\CashRegister::where('user_id', auth()->id())->where('status', 'open')->first();
             if (!$activeShift) {
@@ -169,13 +190,14 @@ class PosController extends Controller
                 'total_amount' => $totalAmount,
                 'subtotal_amount'  => $totalAmount,
                 'paid_amount'    => $request->paid_amount,
-                'change_amount' => $request->change_amount,
+                'change_amount' => $changeAmount,
                 'payment_method' => $request->payment_method,
                 'sale_date' => now(),
             ]);
 
-            foreach ($request->cart as $item) {
-                $medicineId = $item['medicine_id'] ?? $item['id'];
+            foreach ($cartItems as $item) {
+                $medicineId = $item['resolved_id'];
+                $sellingPrice = (float) $medicines[$medicineId]->selling_price;
                 $deduction = InventoryService::deductStockFEFO($medicineId, $item['quantity']);
                 $unitHpp = is_array($deduction) ? ($deduction['unit_hpp'] ?? 0.0) : (float) $deduction;
                 $batchNumber = is_array($deduction) ? ($deduction['batch_number'] ?? 'BATCH-AUTO') : 'BATCH-AUTO';
@@ -186,8 +208,8 @@ class PosController extends Controller
                     'batch_number'   => $batchNumber,
                     'quantity'       => $item['quantity'],
                     'purchase_price' => $unitHpp,
-                    'selling_price'  => $item['price'],
-                    'subtotal'       => $item['quantity'] * $item['price'],
+                    'selling_price'  => $sellingPrice,
+                    'subtotal'       => $item['quantity'] * $sellingPrice,
                 ]);
 
                 if (is_array($deduction) && !empty($deduction['batches'])) {

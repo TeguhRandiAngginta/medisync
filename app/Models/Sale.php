@@ -52,7 +52,7 @@ class Sale extends Model
         static::restored(function ($sale) {
             foreach ($sale->details as $detail) {
                 if ($detail->medicine_id && $detail->quantity > 0) {
-                    $deduction = InventoryService::deductStockFEFO($detail->medicine_id, $detail->quantity);
+                    $deduction = InventoryService::deductStockFEFO($detail->medicine_id, $detail->quantity, true);
                     if (is_array($deduction)) {
                         $detail->update([
                             'batch_number'   => $deduction['batch_number'] ?? $detail->batch_number,

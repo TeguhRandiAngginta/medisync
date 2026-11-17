@@ -11,3 +11,4 @@ storage/framework/views/*
 repomix-output.xml
 medisync_full_context.txt
 tests
+bootstrap/cache/*.php

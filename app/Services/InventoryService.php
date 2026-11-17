@@ -11,7 +11,14 @@ use Exception;
 
 class InventoryService
 {
-    public static function deductStockFEFO(int $medicineId, int $requestedQty): array
+    /**
+     * Potong stok per batch dengan urutan FEFO.
+     *
+     * Batch yang sudah kedaluwarsa dilewati (tidak boleh dijual), kecuali
+     * $includeExpired = true (dipakai saat memulihkan transaksi lama yang
+     * dulu terjual ketika batch tersebut masih valid).
+     */
+    public static function deductStockFEFO(int $medicineId, int $requestedQty, bool $includeExpired = false): array
     {
         $medicine = Medicine::where('id', $medicineId)->lockForUpdate()->first();
 
@@ -21,6 +28,7 @@ class InventoryService
 
         $batches = ProductBatch::where('medicine_id', $medicineId)
             ->where('stock_quantity', '>', 0)
+            ->when(!$includeExpired, fn ($q) => $q->whereDate('expired_date', '>=', now()->toDateString()))
             ->orderBy('expired_date', 'asc')
             ->lockForUpdate()
             ->get();
@@ -28,7 +36,7 @@ class InventoryService
         $totalAvailableStock = $batches->sum('stock_quantity');
 
         if ($totalAvailableStock < $requestedQty) {
-            throw new Exception("Stok batch obat '{$medicine->name}' tidak mencukupi. Dibutuhkan: {$requestedQty}, Tersedia: {$totalAvailableStock}.");
+            throw new Exception("Stok batch obat '{$medicine->name}' tidak mencukupi (batch kedaluwarsa tidak dihitung). Dibutuhkan: {$requestedQty}, Tersedia: {$totalAvailableStock}.");
         }
 
         $remainingToDeduct = $requestedQty;
@@ -87,6 +95,10 @@ class InventoryService
         if (empty($batches) || !DB::getSchemaBuilder()->hasTable('sale_detail_batches')) {
             return;
         }
+
+        // Ganti (bukan tambah) rincian batch: baris lama sudah dikembalikan ke stok
+        // saat transaksi dihapus, jika dibiarkan akan dikembalikan dua kali.
+        DB::table('sale_detail_batches')->where('sale_detail_id', $saleDetailId)->delete();
 
         foreach ($batches as $batch) {
             DB::table('sale_detail_batches')->insert([
