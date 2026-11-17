@@ -51,6 +51,18 @@ class ProfileController extends Controller
 
         $user = $request->user();
 
+        // Samakan dengan UserController::destroy: akun yang punya riwayat transaksi/shift
+        // tidak boleh dihapus (melanggar FK dan merusak jejak audit).
+        $hasHistory = \App\Models\Sale::where('user_id', $user->id)->exists()
+            || \App\Models\Purchase::where('user_id', $user->id)->exists()
+            || \App\Models\CashRegister::where('user_id', $user->id)->exists();
+
+        if ($hasHistory) {
+            return back()->withErrors([
+                'password' => 'Akun ini memiliki riwayat transaksi/shift sehingga tidak dapat dihapus. Hubungi Administrator untuk menonaktifkannya.',
+            ]);
+        }
+
         Auth::logout();
 
         $user->delete();

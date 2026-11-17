@@ -145,15 +145,19 @@ class SalesHistoryController extends Controller
     {
         $this->checkOwnerAccess();
 
-        DB::transaction(function () use ($id) {
-            $sale = Sale::onlyTrashed()->findOrFail($id);
-            $inv = $sale->invoice_number;
-            $sale->restore();
+        try {
+            DB::transaction(function () use ($id) {
+                $sale = Sale::onlyTrashed()->findOrFail($id);
+                $inv = $sale->invoice_number;
+                $sale->restore();
 
-            if (class_exists(AuditLog::class)) {
-                AuditLog::record('penjualan', 'RESTORE', "Memulihkan transaksi penjualan No: {$inv} dari keranjang sampah.");
-            }
-        });
+                if (class_exists(AuditLog::class)) {
+                    AuditLog::record('penjualan', 'RESTORE', "Memulihkan transaksi penjualan No: {$inv} dari keranjang sampah.");
+                }
+            });
+        } catch (\Exception $e) {
+            return back()->withErrors(['message' => 'Gagal memulihkan transaksi: ' . $e->getMessage()]);
+        }
 
         return redirect()->back()->with('success', 'Transaksi berhasil dipulihkan.');
     }
@@ -167,16 +171,20 @@ class SalesHistoryController extends Controller
             'ids.*' => 'exists:sales,id',
         ]);
 
-        DB::transaction(function () use ($request) {
-            $sales = Sale::onlyTrashed()->whereIn('id', $request->ids)->get();
-            foreach ($sales as $sale) {
-                $sale->restore();
-            }
+        try {
+            DB::transaction(function () use ($request) {
+                $sales = Sale::onlyTrashed()->whereIn('id', $request->ids)->get();
+                foreach ($sales as $sale) {
+                    $sale->restore();
+                }
 
-            if (class_exists(AuditLog::class)) {
-                AuditLog::record('penjualan', 'BULK_RESTORE', 'Memulihkan ' . count($sales) . ' transaksi penjualan dari keranjang sampah.');
-            }
-        });
+                if (class_exists(AuditLog::class)) {
+                    AuditLog::record('penjualan', 'BULK_RESTORE', 'Memulihkan ' . count($sales) . ' transaksi penjualan dari keranjang sampah.');
+                }
+            });
+        } catch (\Exception $e) {
+            return back()->withErrors(['message' => 'Gagal memulihkan transaksi: ' . $e->getMessage()]);
+        }
 
         return redirect()->back()->with('success', count($request->ids) . ' transaksi berhasil dipulihkan.');
     }

@@ -1,0 +1,57 @@
+services:
+  app:
+    build: { context: ., target: app }
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      RUN_MIGRATIONS: "true"
+    volumes:
+      - storage:/var/www/html/storage
+    depends_on:
+      db: { condition: service_healthy }
+
+  queue:
+    build: { context: ., target: app }
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+    command: php artisan queue:work --tries=3 --timeout=90
+    volumes:
+      - storage:/var/www/html/storage
+    depends_on:
+      - app
+
+  web:
+    build: { context: ., target: web }
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      - storage:/var/www/html/storage:ro
+    depends_on:
+      - app
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-medisync}
+      POSTGRES_USER: ${DB_USERNAME:-medisync}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?isi DB_PASSWORD di .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
+  storage:

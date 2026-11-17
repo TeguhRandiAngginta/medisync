@@ -440,7 +440,8 @@ class PrescriptionController extends Controller
                 'notes'             => $request->notes,
             ]);
 
-            $prescription->items()->delete();
+            // forceDelete: item lama hasil edit tidak boleh hidup lagi saat resep dipulihkan dari trash.
+            $prescription->items()->forceDelete();
 
             foreach ($request->items as $item) {
                 PrescriptionItem::create([
