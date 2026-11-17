@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
 
 export default function MedicineCombobox({
     medicines = [],
-    selectedMedicineId,
+    selectedMedicine = null,
     onSelect,
     error
 }) {
@@ -11,21 +12,41 @@ export default function MedicineCombobox({
     const containerRef = useRef(null);
     const inputRef = useRef(null);
 
-    // Selected medicine object
-    const selectedMedicine = useMemo(() => {
-        return medicines.find((m) => String(m.id) === String(selectedMedicineId)) || null;
-    }, [medicines, selectedMedicineId]);
+    // Daftar awal berasal dari server; pencarian berikutnya juga lewat server (katalog bisa sangat besar).
+    const [options, setOptions] = useState(medicines);
+    const [isSearching, setIsSearching] = useState(false);
+    const requestId = useRef(0);
 
-    // Filter medicines
-    const filteredMedicines = useMemo(() => {
-        if (!searchQuery.trim()) return medicines;
-        const q = searchQuery.toLowerCase();
-        return medicines.filter((m) =>
-            (m.name && m.name.toLowerCase().includes(q)) ||
-            (m.sku && m.sku.toLowerCase().includes(q)) ||
-            (m.generic_name && m.generic_name.toLowerCase().includes(q))
-        );
-    }, [medicines, searchQuery]);
+    useEffect(() => {
+        const term = searchQuery.trim();
+
+        if (term === '') {
+            setOptions(medicines);
+            setIsSearching(false);
+            return undefined;
+        }
+
+        const timer = setTimeout(() => {
+            const current = ++requestId.current;
+            setIsSearching(true);
+
+            axios
+                .get(route('api.stock-adjustments.medicines'), { params: { q: term } })
+                .then((res) => {
+                    if (current === requestId.current) setOptions(res.data);
+                })
+                .catch(() => {
+                    if (current === requestId.current) setOptions([]);
+                })
+                .finally(() => {
+                    if (current === requestId.current) setIsSearching(false);
+                });
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery, medicines]);
+
+    const filteredMedicines = options;
 
     // Handle click outside to close
     useEffect(() => {
@@ -154,7 +175,7 @@ export default function MedicineCombobox({
             {isOpen && (
                 <div className="absolute z-40 mt-2 w-full bg-white dark:bg-[#151E24] rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700/80 max-h-72 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-150">
                     <div className="px-3 py-2 bg-gray-50 dark:bg-[#1E272E] border-b border-gray-100 dark:border-gray-800 text-[11px] font-bold text-gray-400 dark:text-gray-400 uppercase tracking-wider flex justify-between items-center">
-                        <span>Daftar Katalog Obat ({filteredMedicines.length})</span>
+                        <span>{isSearching ? 'Mencari...' : `Hasil Obat (${filteredMedicines.length}${filteredMedicines.length >= 20 ? '+' : ''})`}</span>
                         {searchQuery && (
                             <button
                                 type="button"

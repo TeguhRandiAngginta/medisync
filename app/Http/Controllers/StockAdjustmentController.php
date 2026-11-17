@@ -31,15 +31,41 @@ class StockAdjustmentController extends Controller
         ]);
     }
 
+    private const MEDICINE_SEARCH_LIMIT = 20;
+
     public function create()
     {
-        $medicines = Medicine::with(['batches' => function ($q) {
-            $q->orderBy('expired_date', 'asc');
-        }])->get();
-
+        // Hanya daftar awal; pencarian selanjutnya lewat searchMedicines() agar katalog besar tidak dimuat sekaligus.
         return Inertia::render('StockOpname/Create', [
-            'medicines' => $medicines
+            'medicines' => $this->medicineOptions(''),
         ]);
+    }
+
+    /** Pencarian obat (nama, SKU, zat aktif) beserta batch-nya untuk combobox form opname. */
+    public function searchMedicines(Request $request)
+    {
+        $request->validate(['q' => 'nullable|string|max:100']);
+
+        return response()->json($this->medicineOptions(trim((string) $request->query('q', ''))));
+    }
+
+    private function medicineOptions(string $term)
+    {
+        // Karakter escape '!' (bukan backslash: PDO pgsql salah mengurai '\' di dalam SQL).
+        $like = '%' . mb_strtolower(str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $term)) . '%';
+
+        return Medicine::with(['batches' => fn ($q) => $q->orderBy('expired_date', 'asc')])
+            ->when($term !== '', function ($q) use ($like) {
+                $q->where(function ($w) use ($like) {
+                    foreach (['name', 'sku', 'generic_name'] as $column) {
+                        // LOWER + LIKE ... ESCAPE: portabel (PostgreSQL dan SQLite), % dan _ dari input tidak jadi wildcard
+                        $w->orWhereRaw("LOWER({$column}) LIKE ? ESCAPE '!'", [$like]);
+                    }
+                });
+            })
+            ->orderBy('name')
+            ->limit(self::MEDICINE_SEARCH_LIMIT)
+            ->get();
     }
 
     public function store(Request $request)

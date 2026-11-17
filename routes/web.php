@@ -98,6 +98,7 @@ Route::middleware(['auth', 'verified', 'role:superadmin,apoteker'])->group(funct
 
     Route::get('/product-batches', [PurchaseController::class, 'batchesIndex'])->name('batches.index');
 
+    Route::get('/api/stock-adjustments/medicines', [App\Http\Controllers\StockAdjustmentController::class, 'searchMedicines'])->name('api.stock-adjustments.medicines');
     Route::post('/stock-adjustments/bulk-destroy', [App\Http\Controllers\StockAdjustmentController::class, 'bulkDestroy'])->name('stock-adjustments.bulk-destroy');
     Route::post('/stock-adjustments/bulk-restore', [App\Http\Controllers\StockAdjustmentController::class, 'bulkRestore'])->name('stock-adjustments.bulk-restore');
     Route::post('/stock-adjustments/bulk-force-delete', [App\Http\Controllers\StockAdjustmentController::class, 'bulkForceDelete'])->name('stock-adjustments.bulk-force-delete');
