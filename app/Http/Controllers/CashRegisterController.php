@@ -64,7 +64,7 @@ class CashRegisterController extends Controller
             ->where('status', 'open')
             ->firstOrFail();
 
-        DB::transaction(function () use ($request, &$activeShift) {
+        $result = DB::transaction(function () use ($request, &$activeShift) {
             // Kunci shift agar penutupan ganda (klik ganda) tidak dihitung dua kali.
             $activeShift = CashRegister::whereKey($activeShift->id)->where('status', 'open')->lockForUpdate()->first();
             abort_if(!$activeShift, 409, 'Shift ini sudah ditutup.');
@@ -132,24 +132,51 @@ class CashRegisterController extends Controller
                 }
             }
 
+            // Uang di laci seharusnya = modal awal + tunai bersih penjualan (QRIS/transfer tidak masuk laci).
+            $expectedCash = round((float) $activeShift->opening_amount + $systemCash, 2);
+            $difference = round((float) $request->closing_amount - $expectedCash, 2);
+
             $activeShift->update([
                 'closed_at' => now(),
                 'closing_amount' => $request->closing_amount,
                 'system_cash_amount' => $systemCash,
                 'system_qris_amount' => $systemQris,
                 'system_transfer_amount' => $systemTransfer,
+                'expected_cash_amount' => $expectedCash,
+                'cash_difference' => $difference,
                 'notes' => $request->notes,
                 'status' => 'closed'
             ]);
 
+            $rp = fn ($n) => 'Rp ' . number_format(abs($n), 0, ',', '.');
+            $label = $this->differenceLabel($difference, $rp);
+
             AuditLog::record(
                 'pos_shift',
                 'UPDATE',
-                'Menutup shift kasir #' . $activeShift->id . ' - Fisik: Rp ' . number_format($request->closing_amount, 0, ',', '.') . ', Sistem Tunai: Rp ' . number_format($systemCash, 0, ',', '.') . ', QRIS: Rp ' . number_format($systemQris, 0, ',', '.') . ', Transfer: Rp ' . number_format($systemTransfer, 0, ',', '.')
+                'Menutup shift kasir #' . $activeShift->id
+                . ' - Modal awal: ' . $rp($activeShift->opening_amount)
+                . ', Tunai penjualan: ' . $rp($systemCash)
+                . ', Seharusnya di laci: ' . $rp($expectedCash)
+                . ', Fisik: ' . $rp($request->closing_amount)
+                . ', Selisih: ' . $label
+                . ', QRIS: ' . $rp($systemQris) . ', Transfer: ' . $rp($systemTransfer)
             );
+
+            return $label;
         });
 
-        return redirect()->route('dashboard')->with('success', 'Shift kasir berhasil ditutup dan direkonsiliasi.');
+        return redirect()->route('dashboard')->with('success', 'Shift kasir berhasil ditutup. Selisih kas: ' . $result . '.');
+    }
+
+    /** "sesuai", "kurang Rp X", atau "lebih Rp X". */
+    private function differenceLabel(float $difference, callable $rp): string
+    {
+        if ($difference == 0.0) {
+            return 'sesuai (Rp 0)';
+        }
+
+        return ($difference < 0 ? 'kurang ' : 'lebih ') . $rp($difference);
     }
 
     /**

@@ -130,4 +130,61 @@ class ShiftReconciliationTest extends TestCase
 
         $this->assertSame(0, Sale::count());
     }
+
+    private function closeWith(float $physical): CashRegister
+    {
+        $this->post(route('pos.shift.close'), ['closing_amount' => $physical])->assertSessionHasNoErrors();
+
+        return CashRegister::latest('id')->firstOrFail();
+    }
+
+    public function test_close_shift_cash_matches_when_opening_plus_cash_sales_equals_physical(): void
+    {
+        $this->open();                                   // modal awal 100.000
+        $this->sell(5, ['cash' => 50000]);               // tunai 50.000
+        $shift = $this->closeWith(150000);
+
+        $this->assertEquals(150000, $shift->expected_cash_amount);
+        $this->assertEquals(0, $shift->cash_difference);
+        $this->assertStringContainsString('sesuai', session('success'));
+    }
+
+    public function test_close_shift_records_shortage_and_overage(): void
+    {
+        $this->open();
+        $this->sell(5, ['cash' => 50000]);
+        $short = $this->closeWith(140000);
+
+        $this->assertEquals(-10000, $short->cash_difference);
+        $this->assertStringContainsString('kurang Rp 10.000', session('success'));
+        $this->assertTrue(\App\Models\AuditLog::where('module', 'pos_shift')
+            ->where('description', 'like', '%Selisih: kurang Rp 10.000%')->exists());
+
+        $this->open();
+        $this->sell(5, ['cash' => 50000]);
+        $over = $this->closeWith(160000);
+
+        $this->assertEquals(10000, $over->cash_difference);
+        $this->assertStringContainsString('lebih Rp 10.000', session('success'));
+    }
+
+    public function test_non_cash_sales_do_not_count_toward_expected_drawer_cash(): void
+    {
+        $this->open();
+        $this->sell(5, ['qris' => 50000]);               // QRIS tidak masuk laci
+        $shift = $this->closeWith(100000);
+
+        $this->assertEquals(100000, $shift->expected_cash_amount);
+        $this->assertEquals(0, $shift->cash_difference);
+    }
+
+    public function test_change_given_is_subtracted_from_expected_cash(): void
+    {
+        $this->open();
+        $this->sell(5, ['cash' => 100000]);              // total 50.000, kembalian 50.000 => tunai bersih 50.000
+        $shift = $this->closeWith(150000);
+
+        $this->assertEquals(150000, $shift->expected_cash_amount);
+        $this->assertEquals(0, $shift->cash_difference);
+    }
 }
